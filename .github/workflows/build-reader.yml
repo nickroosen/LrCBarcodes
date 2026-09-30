@@ -1,0 +1,47 @@
+# Builds the Windows barcode reader (ZXingReader.exe from ZXing-C++) that ships in
+# LrCBarcodes.lrdevplugin/bin/win. Run manually, download the artifact, and commit
+# the exe when upgrading ZXing-C++.
+name: Build barcode reader
+
+on:
+  workflow_dispatch:
+    inputs:
+      zxing_version:
+        description: "ZXing-C++ tag"
+        default: "v3.1.1"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ZXing-C++
+        uses: actions/checkout@v4
+        with:
+          repository: zxing-cpp/zxing-cpp
+          ref: ${{ inputs.zxing_version }}
+          path: zxing
+
+      - name: Configure
+        run: >
+          cmake -S zxing -B build -A x64
+          -DBUILD_SHARED_LIBS=OFF
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          -DZXING_READERS=ON -DZXING_WRITERS=OFF
+          -DZXING_C_API=OFF -DZXING_EXAMPLES=ON
+          -DZXING_DEPENDENCIES=GITHUB
+
+      - name: Build
+        run: cmake --build build --config Release --target ZXingReader
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          build/example/Release/ZXingReader.exe -version
+          build/example/Release/ZXingReader.exe -1 zxing/test/samples/code128-1/1.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZXingReader-windows-x64
+          path: |
+            build/example/Release/ZXingReader.exe
+            zxing/LICENSE

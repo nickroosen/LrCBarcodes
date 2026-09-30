@@ -1,20 +1,21 @@
+-- Field ids must be prefixed with the plug-in's LrToolkitIdentifier.
+local prefix = 'com.github.nickroosen.lrcbarcodes.'
+
 return {
-    title = "LrC Barcode Metadata",
-    id = "lrcBarcodes",
+    title = "LrC Barcodes",
+    id = "lrcBarcodesTagset",
     items = {
-        'lrcBarcodes.barcodeType',
-        'lrcBarcodes.barcodeValue',
+        prefix .. 'barcodeStatus',
+        prefix .. 'barcodeType',
+        prefix .. 'barcodeValue',
+        prefix .. 'matrixValue',
+        prefix .. 'linearValue',
 
         'com.adobe.separator',
 
+        'com.adobe.filename',
+        'com.adobe.copyname',
         'com.adobe.title',
         'com.adobe.caption',
-        'com.adobe.copyname',
-        'com.adobe.label',
-
-        'com.adobe.separator',
-
-        'com.adobe.headline',
-        'com.adobe.personShown'
-    }
+    },
 }
