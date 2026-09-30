@@ -6,7 +6,7 @@ Tests for the pieces of the plug-in that can run outside Lightroom.
 
 1. Every plug-in .lua file compiles under Lua 5.1 (Lightroom's Lua version).
 2. ReaderOutput.lua and Propagation.lua unit tests.
-3. End to end: generated QR codes -> bin/win/ZXingReader.exe -> ReaderOutput.parse.
+3. End to end: generated QR codes -> the bundled reader for this OS -> ReaderOutput.parse.
 """
 import os
 import shutil
@@ -19,7 +19,8 @@ from lupa import lua51
 
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "LrCBarcodes.lrdevplugin"
-READER = PLUGIN / "bin" / "win" / "ZXingReader.exe"
+READERS = {"win32": "bin/win/ZXingReader.exe", "darwin": "bin/mac/ZXingReader"}
+READER = PLUGIN / READERS[sys.platform] if sys.platform in READERS else None
 
 failures = 0
 
@@ -153,7 +154,10 @@ def test_propagation():
 
 
 def test_end_to_end():
-    print("End to end (ZXingReader.exe)")
+    if READER is None:
+        print("End to end: skipped (no bundled reader for %s)" % sys.platform)
+        return
+    print("End to end (%s)" % READER.relative_to(PLUGIN).as_posix())
     if not READER.exists():
         check("reader present", False, True)
         return
@@ -180,8 +184,14 @@ def test_end_to_end():
         names = ["p001.jpg", "p002.jpg", "p003.jpg", "p004.jpg", "p005.jpg"]
         out_path, err_path = work / "reader-output.txt", work / "reader-errors.txt"
         # Same shape of command line that Scanner.lua passes to LrTasks.execute.
-        command = 'cd /d "%s" && "%s" -1 %s >"%s" 2>"%s"' % (work, READER, " ".join(names), out_path, err_path)
-        subprocess.run('cmd /s /c "' + command + '"', shell=False)
+        if os.name == "nt":
+            command = 'cd /d "%s" && "%s" -1 %s >"%s" 2>"%s"' % (work, READER, " ".join(names), out_path, err_path)
+            subprocess.run('cmd /s /c "' + command + '"', shell=False)
+        else:
+            import shlex
+            q = lambda p: shlex.quote(str(p))
+            command = "cd %s && %s -1 %s >%s 2>%s" % (q(work), q(READER), " ".join(names), q(out_path), q(err_path))
+            subprocess.run(["/bin/sh", "-c", command])
 
         lua = new_lua()
         ro = lua.eval("require 'ReaderOutput'")
@@ -198,7 +208,6 @@ if __name__ == "__main__":
     test_compile()
     test_reader_output()
     test_propagation()
-    if os.name == "nt":
-        test_end_to_end()
+    test_end_to_end()
     print("\nFAILED: %d" % failures if failures else "\nAll tests passed.")
     sys.exit(1 if failures else 0)

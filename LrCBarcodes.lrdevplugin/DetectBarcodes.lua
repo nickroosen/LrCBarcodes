@@ -10,6 +10,7 @@ local LrView = import 'LrView'
 local Prefs = require 'Prefs'
 local ReaderOutput = require 'ReaderOutput'
 local Scanner = require 'Scanner'
+local SmartCollections = require 'SmartCollections'
 
 local function plural(n, word)
     return n .. " " .. word .. (n == 1 and "" or "s")
@@ -20,6 +21,7 @@ local function showOptionsDialog(context, photoCount)
     local props = LrBinding.makePropertyTable(context)
     props.skipAlreadyScanned = Prefs.skipAlreadyScanned
     props.fullSizeRescan = Prefs.fullSizeRescan
+    props.createSmartCollections = Prefs.createSmartCollections
 
     local contents = f:column {
         bind_to_object = props,
@@ -38,6 +40,10 @@ local function showOptionsDialog(context, photoCount)
             title = "Rescan photos with barcodes at full resolution (finds small 1D barcodes; slower)",
             value = LrView.bind('fullSizeRescan'),
         },
+        f:checkbox {
+            title = "Create \"Barcode Found\" and \"No Barcode\" smart collections",
+            value = LrView.bind('createSmartCollections'),
+        },
     }
 
     local result = LrDialogs.presentModalDialog {
@@ -50,6 +56,7 @@ local function showOptionsDialog(context, photoCount)
     end
     Prefs.skipAlreadyScanned = props.skipAlreadyScanned
     Prefs.fullSizeRescan = props.fullSizeRescan
+    Prefs.createSmartCollections = props.createSmartCollections
     return props
 end
 
@@ -196,6 +203,10 @@ local function detectBarcodes(context)
     end
 
     progress:done()
+
+    if options.createSmartCollections then
+        SmartCollections.ensure(catalog)
+    end
 
     LrDialogs.message("Barcode Detection Complete",
                       summarize(scanned, counts, skipped, failures, canceled),
