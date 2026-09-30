@@ -157,9 +157,9 @@ input:focus, select:focus, .btn:focus-visible, .card:focus-visible, .subject:foc
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, .18); overflow: hidden; min-width: 220px;
 }
-.menu button { display: block; width: 100%; min-height: var(--tap); padding: 0 16px; border: 0;
+.menu button, .menu .menu-item { display: flex; align-items: center; width: 100%; min-height: var(--tap); padding: 0 16px; border: 0;
   border-bottom: 1px solid var(--border); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.menu button:last-child { border-bottom: 0; }
+.menu > :last-child { border-bottom: 0; }
 .menu .danger { color: var(--danger); }
 
 .fab {
@@ -194,3 +194,11 @@ input:focus, select:focus, .btn:focus-visible, .card:focus-visible, .subject:foc
   font-size: 15px; max-width: calc(100vw - 32px); box-shadow: 0 6px 16px rgba(0, 0, 0, .3);
 }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.busy { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .45); padding: 16px; }
+.busy-box { background: var(--surface); color: var(--text); border-radius: var(--radius); padding: 22px 26px;
+  display: flex; align-items: center; gap: 14px; max-width: 420px; box-shadow: 0 8px 24px rgba(0, 0, 0, .3); }
+.spinner { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 3px solid var(--border);
+  border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

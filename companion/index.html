@@ -34,6 +34,10 @@
 
     <div class="actions">
       <label class="btn primary">
+        Import GotPhoto QR cards (PDF)
+        <input id="import-pdf" type="file" accept=".pdf,application/pdf" multiple hidden>
+      </label>
+      <label class="btn">
         Import roster (CSV)
         <input id="import-file" type="file" accept=".csv,text/csv,text/plain" hidden>
       </label>
@@ -42,7 +46,8 @@
 
     <h2 class="section-title">Jobs</h2>
     <ul id="job-list" class="cards"></ul>
-    <p id="no-jobs" class="muted">No jobs yet. Import a roster from GotPhoto or a spreadsheet saved as CSV.</p>
+    <p id="no-jobs" class="muted">No jobs yet. Import the QR card PDFs you downloaded from GotPhoto
+      (you can pick several at once), or a roster saved as CSV.</p>
 
     <p class="footnote">
       Rosters are stored only in this browser on this device. Nothing is uploaded.
@@ -109,6 +114,7 @@
   </header>
   <div id="roster-menu" class="menu" hidden>
     <button id="menu-export">Export results (CSV)</button>
+    <label id="menu-add-pdf" class="menu-item">Add card PDFs<input id="add-pdf" type="file" accept=".pdf,application/pdf" multiple hidden></label>
     <button id="menu-settings">Job settings</button>
     <button id="menu-delete" class="danger">Delete job</button>
   </div>
@@ -163,6 +169,13 @@
 </section>
 
 <div id="toast" class="toast" role="status" hidden></div>
+
+<div id="busy" class="busy" role="alertdialog" aria-live="polite" hidden>
+  <div class="busy-box">
+    <div class="spinner"></div>
+    <div id="busy-text">Reading cards...</div>
+  </div>
+</div>
 
 <script src="vendor/qrcode.js"></script>
 <script src="lib.js"></script>

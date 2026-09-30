@@ -92,3 +92,84 @@ test('jobs: describe, walk-ups, search, progress and export', () => {
   assert.equal(exported.rows[2]['Walk-up'], 'Yes');
   assert.equal(exported.rows[2].Link, '');
 });
+
+// Text items as PDF.js reports them for a GotPhoto card page (two cards per
+// A4 page, second card 411pt lower). Positions copied from a real export;
+// names and codes are made up.
+function cardPage(cards) {
+  const items = [];
+  cards.forEach((c, i) => {
+    const dy = i * 411;
+    items.push(
+      { str: 'Photos of', x: 179, y: 87 + dy },
+      { str: 'Class/Group/Teacher', x: 393, y: 87 + dy },
+      { str: 'Visit your photographer\'s online shop', x: 86, y: 113 + dy },
+      { str: 'studio.gotphoto.com', x: 82, y: 134 + dy },
+      { str: c.code, x: 82, y: 187 + dy },
+      { str: `## JOB00003 - #${c.card} - ${c.code}`, x: 364, y: 275 + dy },
+      { str: c.digits.split('').join(' '), x: 431, y: 332 + dy },
+    );
+    if (c.name) items.push({ str: c.name, x: 218, y: 67 + dy });
+    if (c.group) items.push({ str: c.group, x: 459, y: 67 + dy });
+  });
+  return items;
+}
+
+test('parses named GotPhoto cards, two per page', () => {
+  const cards = lib.parseCardPage(cardPage([
+    { card: '1.1', code: 'QX7K2M9P', digits: '111122223333444', name: 'Ava Martínez', group: 'Bluebells' },
+    { card: '1.2', code: 'RT5N8B2W', digits: '555566667777888', name: 'Noah O\'Connor', group: 'Shooting Stars' },
+  ]));
+  assert.equal(cards.length, 2);
+  assert.deepEqual(
+    cards.map(({ job, card, accessCode, name, group, barcode }) => ({ job, card, accessCode, name, group, barcode })), [
+      { job: 'JOB00003', card: '1.1', accessCode: 'QX7K2M9P', name: 'Ava Martínez', group: 'Bluebells', barcode: '111122223333444' },
+      { job: 'JOB00003', card: '1.2', accessCode: 'RT5N8B2W', name: 'Noah O\'Connor', group: 'Shooting Stars', barcode: '555566667777888' },
+    ]);
+});
+
+test('parses blank password cards and ignores the cover page', () => {
+  const cards = lib.parseCardPage(cardPage([{ card: '2.1', code: 'ZZ11YY22', digits: '999988887777666' }]));
+  assert.equal(cards[0].name, '');
+  assert.equal(cards[0].group, '');
+  assert.equal(cards[0].accessCode, 'ZZ11YY22');
+  assert.deepEqual(lib.parseCardPage([{ str: 'Password Cards', x: 34, y: 75 }, { str: 'Quantity: 4', x: 34, y: 140 }]), []);
+});
+
+test('assigns each decoded QR to the nearest card', () => {
+  const cards = lib.parseCardPage(cardPage([
+    { card: '1.1', code: 'AAAA1111', digits: '111111111111111', name: 'A', group: 'G' },
+    { card: '1.2', code: 'BBBB2222', digits: '222222222222222', name: 'B', group: 'G' },
+  ]));
+  // QR centers sit left of and below each ID line (about 300, 335 on the first card).
+  const missing = lib.assignLinks(cards, [
+    { text: 'https://studio.gotphoto.com/gc/second/', x: 300, y: 746 },
+    { text: 'https://studio.gotphoto.com/gc/first/', x: 300, y: 335 },
+  ]);
+  assert.equal(missing, 0);
+  assert.equal(cards[0].link, 'https://studio.gotphoto.com/gc/first/');
+  assert.equal(cards[1].link, 'https://studio.gotphoto.com/gc/second/');
+
+  const lone = lib.parseCardPage(cardPage([{ card: '1.1', code: 'CCCC3333', digits: '333333333333333' }]));
+  assert.equal(lib.assignLinks(lone, []), 1, 'reports cards whose QR could not be read');
+});
+
+test('card jobs: names fall back to the card number, duplicates are skipped', () => {
+  const job = lib.createJob('Picture day', lib.CARD_HEADERS, [], lib.cardJobSettings(), 0);
+  const cards = lib.parseCardPage(cardPage([
+    { card: '1.1', code: 'AAAA1111', digits: '111111111111111', name: 'Ava Martínez', group: 'Bluebells' },
+    { card: '2.1', code: 'BBBB2222', digits: '222222222222222' },
+  ]));
+  lib.assignLinks(cards, [{ text: 'https://s.gotphoto.com/gc/a/', x: 300, y: 335 }, { text: 'https://s.gotphoto.com/gc/b/', x: 300, y: 746 }]);
+  assert.deepEqual(lib.addCards(job, cards), { added: 2, duplicates: 0 });
+  assert.deepEqual(lib.addCards(job, cards), { added: 0, duplicates: 2 });
+  assert.deepEqual(lib.describe(job, job.subjects[0]), { name: 'Ava Martínez', group: 'Bluebells', qr: 'https://s.gotphoto.com/gc/a/' });
+  assert.equal(lib.describe(job, job.subjects[1]).name, 'Card 2.1 · BBBB2222');
+  assert.ok(lib.matches(job, job.subjects[1], 'bbbb2222'), 'search finds access codes');
+  assert.ok(lib.matches(job, job.subjects[0], 'AAAA1111'), 'also on named cards');
+  assert.ok(lib.matches(job, job.subjects[0], '111111111111111'), 'and barcode numbers');
+  const exported = lib.parseCSV(lib.exportCSV(job)).rows[0];
+  assert.equal(exported['Access Code'], 'AAAA1111');
+  assert.equal(exported['Gallery Link'], 'https://s.gotphoto.com/gc/a/');
+  assert.equal(exported['Barcode'], '111111111111111');
+});

@@ -5,6 +5,9 @@ const CACHE = 'lrcb-companion-' + VERSION;
 const FILES = [
   './', 'index.html', 'styles.css', 'app.js', 'lib.js', 'vendor/qrcode.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png',
+  // Card PDF import (loaded on demand, cached so it also works offline)
+  'vendor/pdfjs/pdf.min.mjs', 'vendor/pdfjs/pdf.worker.min.mjs',
+  'vendor/zxing/zxing-reader.js', 'vendor/zxing/zxing_reader.wasm',
 ];
 
 self.addEventListener('install', event => {

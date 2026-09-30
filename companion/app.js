@@ -67,7 +67,7 @@
     t.textContent = message;
     t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+    toastTimer = setTimeout(() => { t.hidden = true; }, Math.max(2600, message.length * 70));
   }
 
   function formatTime(iso) {
@@ -178,6 +178,159 @@
     pendingImport = { title: file.name.replace(/\.[^.]+$/, ''), headers: parsed.headers, rows: parsed.rows };
     editingJobId = null;
     go('setup');
+  });
+
+  // ------------------------------------------------ GotPhoto card PDFs
+
+  // PDF.js (to read text and render pages) and ZXing (to decode the QR codes)
+  // are only loaded when a PDF is imported. Both are bundled with the app.
+  let pdfjsLib = null;
+  let zxingReady = null;
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = el('script', { src });
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Could not load ' + src));
+      document.head.append(script);
+    });
+  }
+
+  async function loadCardLibraries() {
+    if (!pdfjsLib) {
+      pdfjsLib = await import('./vendor/pdfjs/pdf.min.mjs');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.min.mjs', location.href).href;
+    }
+    if (!zxingReady) {
+      zxingReady = loadScript('vendor/zxing/zxing-reader.js').then(() => window.ZXingWASM.prepareZXingModule({
+        overrides: {
+          locateFile: (path, prefix) =>
+            path.endsWith('.wasm') ? new URL('vendor/zxing/' + path, location.href).href : prefix + path,
+        },
+        fireImmediately: true,
+      }));
+    }
+    await zxingReady;
+  }
+
+  // Renders a page and returns its QR codes as { text, x, y } centers in page points.
+  async function decodePageQRs(page, scale) {
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    canvas.width = canvas.height = 0;  // free the bitmap early on memory-limited tablets
+    const results = await window.ZXingWASM.readBarcodes(image, {
+      formats: ['QRCode'], tryHarder: true, maxNumberOfSymbols: 32,
+    });
+    return results.filter(r => r.isValid).map(r => {
+      const p = r.position;
+      const corners = [p.topLeft, p.topRight, p.bottomLeft, p.bottomRight];
+      return {
+        text: r.text,
+        x: corners.reduce((sum, c) => sum + c.x, 0) / 4 / scale,
+        y: corners.reduce((sum, c) => sum + c.y, 0) / 4 / scale,
+      };
+    });
+  }
+
+  async function readCardPage(page) {
+    const base = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    const items = content.items.map(it => {
+      const [x, y] = base.convertToViewportPoint(it.transform[4], it.transform[5]);
+      return { str: it.str, x, y };
+    });
+    const cards = L.parseCardPage(items);
+    if (!cards.length) return cards;  // e.g. the cover page
+    // Render at 2x; retry at 3x if any card's QR code wasn't found.
+    for (const scale of [2, 3]) {
+      if (L.assignLinks(cards, await decodePageQRs(page, scale)) === 0) break;
+    }
+    return cards;
+  }
+
+  function busy(message) {
+    $('#busy').hidden = message == null;
+    if (message != null) $('#busy-text').textContent = message;
+  }
+
+  // Reads GotPhoto card PDFs into a new job (no jobId) or an existing one.
+  async function importCardPDFs(files, jobId) {
+    files = Array.from(files || []);
+    if (!files.length) return;
+    const cards = [];
+    const failed = [];
+    try {
+      busy('Loading PDF reader...');
+      await loadCardLibraries();
+      for (const [fileIndex, file] of files.entries()) {
+        let loading, doc;
+        try {
+          loading = pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+          doc = await loading.promise;
+        } catch (err) {
+          failed.push(file.name);
+          continue;
+        }
+        for (let p = 1; p <= doc.numPages; p++) {
+          busy(`Reading ${files.length > 1 ? `file ${fileIndex + 1} of ${files.length}, ` : ''}page ${p} of ${doc.numPages}...`);
+          const page = await doc.getPage(p);
+          cards.push(...await readCardPage(page));
+          page.cleanup();
+        }
+        await loading.destroy();
+      }
+    } catch (err) {
+      busy(null);
+      toast('Could not read the PDF: ' + (err && err.message ? err.message : err));
+      return;
+    }
+    busy(null);
+
+    if (!cards.length) {
+      toast(failed.length ? 'Could not open ' + failed.join(', ') : 'No GotPhoto QR cards found in that PDF.');
+      return;
+    }
+
+    let job = jobId ? findJob(jobId) : null;
+    if (!job) {
+      const title = files[0].name
+        .replace(/\.pdf$/i, '')
+        .replace(/^Password_Card_\d+_\d+_\d+_/i, '')
+        .replace(/_/g, ' ')
+        .trim();
+      job = L.createJob(title || 'GotPhoto cards', L.CARD_HEADERS, [], L.cardJobSettings());
+      db.jobs.push(job);
+    }
+    const result = L.addCards(job, cards);
+    save();
+
+    const noLink = cards.filter(c => !c.link).length;
+    const named = cards.filter(c => c.name).length;
+    const parts = [`Added ${result.added} card${result.added === 1 ? '' : 's'}`];
+    if (named < cards.length) parts.push(`${cards.length - named} without a name`);
+    if (result.duplicates) parts.push(`${result.duplicates} already in this job`);
+    if (noLink) parts.push(`${noLink} QR code${noLink === 1 ? '' : 's'} could not be read`);
+    if (failed.length) parts.push('could not open ' + failed.join(', '));
+    toast(parts.join('; ') + '.');
+
+    if (jobId) renderRoster(job);
+    else go('roster', { jobId: job.id });
+  }
+
+  $('#import-pdf').addEventListener('change', e => {
+    const files = e.target.files;
+    importCardPDFs(files).finally(() => { e.target.value = ''; });
+  });
+
+  $('#add-pdf').addEventListener('change', e => {
+    const files = e.target.files;
+    closeMenu();
+    importCardPDFs(files, route.jobId).finally(() => { e.target.value = ''; });
   });
 
   $('#new-blank').addEventListener('click', () => {

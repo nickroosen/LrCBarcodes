@@ -175,6 +175,119 @@
     };
   }
 
+  // --------------------------------------------------- GotPhoto card PDFs
+
+  // GotPhoto doesn't export gallery links, but its QR card PDFs contain them.
+  // Each card has a rotated ID line "## JOB00003 - #1.2 - XB9C74JN" (job,
+  // card number, access code), the access code again, the Code 128 number as
+  // spaced digits, and on named cards the subject's name and class printed
+  // just above the "Photos of" and "Class/Group/Teacher" labels. The gallery
+  // link is only in the QR code, which the app decodes from the rendered page
+  // and assigns to the nearest card with assignLinks().
+
+  const CARD_ID = /(JOB\w+)\s*-\s*#\s*([\d.]+)\s*-\s*([A-Z0-9]{4,})/;
+
+  // items: text items on one page, as { str, x, y } in page points with the
+  // origin at the top left (y is the text baseline).
+  // Returns cards: { job, card, accessCode, name, group, barcode, x, y }.
+  function parseCardPage(items) {
+    const clean = items
+      .map(it => ({ str: String(it.str || '').replace(/\s+/g, ' ').trim(), x: it.x, y: it.y }))
+      .filter(it => it.str);
+    const photosLabels = clean.filter(it => /^photos of$/i.test(it.str));
+    const groupLabels = clean.filter(it => /^class\s*\/\s*group/i.test(it.str));
+    const digitLines = clean.filter(it => /^\d(\s\d){7,}$/.test(it.str));
+
+    const nearest = (list, from, filter) => {
+      let best = null, bestD = Infinity;
+      for (const it of list) {
+        if (filter && !filter(it)) continue;
+        const d = Math.hypot(it.x - from.x, it.y - from.y);
+        if (d < bestD) { best = it; bestD = d; }
+      }
+      return best;
+    };
+
+    const cards = [];
+    for (const it of clean) {
+      const m = CARD_ID.exec(it.str);
+      if (!m) continue;
+      const card = { job: m[1], card: m[2], accessCode: m[3], name: '', group: '', barcode: '', x: it.x, y: it.y };
+
+      // Labels belong to this card if they're above the ID line and within
+      // one card's height of it.
+      const label = nearest(photosLabels, it, l => l.y < it.y && it.y - l.y < 400);
+      if (label) {
+        const groupLabel = nearest(groupLabels, label, g => Math.abs(g.y - label.y) < 5);
+        const splitX = groupLabel ? groupLabel.x : Infinity;
+        const band = clean
+          .filter(t => t.y < label.y - 3 && label.y - t.y < 40 && t.x >= label.x - 20)
+          .sort((a, b) => a.x - b.x);
+        card.name = band.filter(t => t.x < splitX - 5).map(t => t.str).join(' ').trim();
+        card.group = band.filter(t => t.x >= splitX - 5).map(t => t.str).join(' ').trim();
+      }
+      const digits = nearest(digitLines, it, d => Math.abs(d.y - it.y) < 150);
+      if (digits) card.barcode = digits.str.replace(/\s/g, '');
+      cards.push(card);
+    }
+    return cards;
+  }
+
+  // Pairs decoded QR codes ({ text, x, y } centers, in the same page points)
+  // with cards on the same page: each QR goes to the nearest card ID line.
+  // Sets card.link; returns the number of cards left without one.
+  function assignLinks(cards, qrs) {
+    const free = qrs.slice();
+    for (const card of cards) {
+      let bestI = -1, bestD = Infinity;
+      free.forEach((q, i) => {
+        const d = Math.hypot(q.x - card.x, q.y - card.y);
+        if (d < bestD) { bestD = d; bestI = i; }
+      });
+      card.link = bestI >= 0 && bestD < 350 ? free.splice(bestI, 1)[0].text : '';
+    }
+    return cards.filter(c => !c.link).length;
+  }
+
+  const CARD_HEADERS = ['Name', 'Class', 'Access Code', 'Card', 'Barcode', 'Gallery Link'];
+
+  function cardRow(card) {
+    return {
+      'Name': card.name,
+      'Class': card.group,
+      'Access Code': card.accessCode,
+      'Card': card.card,
+      'Barcode': card.barcode,
+      'Gallery Link': card.link || '',
+    };
+  }
+
+  function cardJobSettings() {
+    return {
+      nameTemplate: '{Name}',
+      fallbackNameTemplate: 'Card {Card} · {Access Code}',  // password cards have no name
+      groupColumn: 'Class',
+      qrTemplate: '{Gallery Link}',
+      walkupTemplate: 'WALKUP-{#} {name}',
+      source: 'gotphoto-cards',
+    };
+  }
+
+  // Adds cards to a job, skipping access codes it already has.
+  // Returns { added, duplicates }.
+  function addCards(job, cards) {
+    const have = new Set(job.subjects.map(s => s.data['Access Code']).filter(Boolean));
+    let added = 0, duplicates = 0;
+    for (const card of cards) {
+      if (have.has(card.accessCode)) { duplicates++; continue; }
+      have.add(card.accessCode);
+      job.subjects.push({ id: 'c' + card.accessCode, data: cardRow(card), done: null });
+      added++;
+    }
+    for (const h of CARD_HEADERS) if (!job.headers.includes(h)) job.headers.push(h);
+    return { added, duplicates };
+  }
+
   // -------------------------------------------------------------- jobs
 
   function pad(n, width) {
@@ -185,7 +298,9 @@
   function describe(job, subject) {
     const s = job.settings;
     const row = subject.data;
-    const name = renderTemplate(s.nameTemplate, row) || '(no name)';
+    const name = renderTemplate(s.nameTemplate, row)
+      || (s.fallbackNameTemplate ? renderTemplate(s.fallbackNameTemplate, row) : '')
+      || '(no name)';
     const group = s.groupColumn ? (row[s.groupColumn] || '') : '';
     const extras = { name, group, '#': subject.walkup ? pad(subject.walkup, 3) : '' };
     const template = subject.walkup ? s.walkupTemplate : s.qrTemplate;
@@ -216,7 +331,8 @@
     return subject;
   }
 
-  // Case- and accent-insensitive search across name, group and QR content.
+  // Case- and accent-insensitive search across name, group, QR content and
+  // every roster field (e.g. access code, barcode number).
   function normalize(s) {
     return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   }
@@ -225,7 +341,7 @@
     const q = normalize(query).trim();
     if (!q) return true;
     const d = describe(job, subject);
-    const hay = normalize([d.name, d.group, d.qr].join(' '));
+    const hay = normalize([d.name, d.group, d.qr].concat(Object.values(subject.data)).join(' '));
     return q.split(/\s+/).every(term => hay.includes(term));
   }
 
@@ -253,5 +369,6 @@
     detectDelimiter, parseCSV, toCSV,
     renderTemplate, templateColumns,
     detectSettings, describe, createJob, addWalkup, matches, progress, exportCSV,
+    parseCardPage, assignLinks, addCards, cardJobSettings, CARD_HEADERS,
   };
 });
