@@ -2,8 +2,8 @@
 
 A Lightroom Classic plug-in that finds barcodes and QR codes in your photos, stores
 what it reads in the catalog, and copies those values onto the photos that follow.
-The main use is product photography: shoot a barcode card, then the product, and
-let the plug-in label the product shots for you.
+The main use is volume photography: shoot a barcode card, then the subject, and
+let the plug-in label the subjects for you.
 
 **Platforms:** Windows and macOS (Apple Silicon and Intel), Lightroom Classic 6 or
 later. The macOS version is new and hasn't been tested inside Lightroom yet.
