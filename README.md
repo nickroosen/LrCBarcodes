@@ -110,6 +110,64 @@ the frame width, but the Code 128 next to it needs full resolution unless the ca
 nearly fills the frame. Since usually only the card shots are rescanned, the extra
 time is small.
 
+## Companion app: QR cards on a tablet or phone
+
+Show each subject's QR code on a tablet or phone and photograph the screen as the
+card shot, then hand out the printed card as usual. The plug-in reads a screen
+the same way it reads a printed card, and you can find subjects by searching
+instead of sorting through a stack of cards.
+
+**Open it at <https://nickroosen.github.io/LrCBarcodes/>**, then add it to the home
+screen (Safari: Share › Add to Home Screen; Chrome: menu › Install app). It then
+works offline, which helps in gyms and on fields with no signal.
+
+1. **Import the QR card PDFs from GotPhoto.** GotPhoto doesn't include gallery
+   links in its exports, but its QR card PDFs contain them. Download the card PDFs
+   for the job and tap **Import GotPhoto QR cards (PDF)**; you can pick several
+   PDFs at once, and add more later from **More › Add card PDFs**. For each card,
+   the app reads the name and class (on named cards), access code, card number
+   and Code 128 number, and decodes the gallery link from the QR code. This
+   all happens on the device. Unnamed password cards appear as e.g.
+   `Card 2.1 · ZFC98L4W`. Adding a PDF twice doesn't duplicate cards.
+
+   The **Password Cards** cover page at the start of each PDF supplies the job
+   details, shown in a panel at the top of the roster: job name (used as the job's
+   title), date of shoot, organization and address, and the contact's name, phone
+   and email (tap to call or email). It also lists each PDF with its card count.
+   You get a warning that stays on screen until you dismiss it if a PDF has fewer
+   cards than its cover says, or if it belongs to a different GotPhoto job than the
+   cards already imported.
+
+   You can also **import a roster (CSV)** from any spreadsheet (comma- or
+   semicolon-separated) for jobs without GotPhoto cards. The app detects the name,
+   team/class and QR columns; you can change them:
+   - **Subject name** and **QR code content** are templates, e.g.
+     `{First Name} {Last Name}` or `{Team}-{Jersey Number}`. Tap a column name to
+     insert it.
+   - **QR code content for walk-ups** is used for subjects added on the day, who
+     aren't in GotPhoto yet. By default it's `WALKUP-{#} {name}`, e.g.
+     `WALKUP-001 Priya Shah`.
+
+   There's also **Start a job without a roster**, for walk-ups only.
+2. **On the day,** search for the subject by name, class, access code or barcode
+   number, tap them, and photograph the full-screen QR code before photographing
+   them. Tap **Mark photographed** to return to the list for the next subject. Use **+ Walk-up** for
+   anyone not on the roster; a search that finds no one pre-fills their name.
+3. **Afterwards,** choose **More › Export results (CSV)**. The export has every
+   roster column plus the QR content, whether and when each subject was
+   photographed, and which subjects were walk-ups. For card imports, this is also
+   the one place you get each subject's name, access code and gallery link
+   together in a spreadsheet.
+
+**Privacy:** rosters are stored only in the browser on that device. Nothing is
+uploaded, and there's no account or server. On iPhone and iPad, Safari may clear a
+website's data after about a week of not being used, but not once the app is added
+to the home screen. Export results you need to keep.
+
+**Shooting tips:** turn the screen brightness up and avoid reflections. If the
+QR code shows moiré stripes, step back or zoom in slightly rather than filling the
+frame. The QR code always shows black on white, even in dark mode.
+
 ## Development
 
 ```
@@ -128,8 +186,13 @@ LrCBarcodes.lrdevplugin/
   Prefs.lua                 preference defaults
   bin/win/ZXingReader.exe   ZXing-C++ command-line reader (Windows x64)
   bin/mac/ZXingReader       ZXing-C++ command-line reader (macOS universal)
+companion/                  companion web app (GitHub Pages)
+  lib.js                    CSV parsing, templates, export (pure JS)
+  app.js                    UI
+  vendor/                   qrcode-generator, PDF.js, zxing-wasm (see vendor/README.md)
 scripts/package.py          builds the release zip
-tests/run_tests.py          tests that run outside Lightroom
+tests/run_tests.py          plug-in tests that run outside Lightroom
+tests/companion.test.js     companion app tests (node --test)
 ```
 
 Logs are written to `Documents/LrClassicLogs/LrCBarcodes.log` when the reader
@@ -145,8 +208,14 @@ pip install lupa segno
 python tests/run_tests.py
 ```
 
-The **Tests** workflow runs them on Windows and macOS for every pull request and
-every push to `main`.
+For the companion app, run `node --test tests/companion.test.js`. To try it
+locally, serve the folder (e.g. `python -m http.server --directory companion`) and
+open <http://localhost:8000>.
+
+The **Tests** workflow runs both on Windows and macOS for every pull request and
+every push to `main`. The **Deploy companion app** workflow publishes `companion/`
+to GitHub Pages whenever it changes on `main`. When you change the app's files,
+bump `VERSION` in `companion/sw.js` so installed copies pick up the update.
 
 ### Rebuilding the barcode reader
 

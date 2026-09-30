@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LrC Barcodes Companion</title>
+<meta name="description" content="Show subject QR codes on a tablet or phone for volume photography. Rosters stay on this device.">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="QR Cards">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Home: list of jobs -->
+<section id="view-home" class="view" hidden>
+  <header class="bar">
+    <h1>QR Cards</h1>
+  </header>
+  <main class="content">
+    <div id="storage-warning" class="notice warn" hidden>
+      This browser isn't letting the app save data (private browsing?). Anything you
+      import will be lost when the page closes.
+    </div>
+    <div id="install-hint" class="notice" hidden>
+      <strong>Tip:</strong> add this page to your home screen. It then works offline, and
+      your rosters won't be cleared by the browser after a week of not using it.
+    </div>
+
+    <div class="actions">
+      <label class="btn primary">
+        Import GotPhoto QR cards (PDF)
+        <input id="import-pdf" type="file" accept=".pdf,application/pdf" multiple hidden>
+      </label>
+      <label class="btn">
+        Import roster (CSV)
+        <input id="import-file" type="file" accept=".csv,text/csv,text/plain" hidden>
+      </label>
+      <button id="new-blank" class="btn">Start a job without a roster</button>
+    </div>
+
+    <h2 class="section-title">Jobs</h2>
+    <ul id="job-list" class="cards"></ul>
+    <p id="no-jobs" class="muted">No jobs yet. Import the QR card PDFs you downloaded from GotPhoto
+      (you can pick several at once), or a roster saved as CSV.</p>
+
+    <p class="footnote">
+      Rosters are stored only in this browser on this device. Nothing is uploaded.
+      Export each job's results before clearing browser data.
+      <br>Part of <a href="https://github.com/nickroosen/LrCBarcodes">LrC Barcodes</a>.
+    </p>
+  </main>
+</section>
+
+<!-- Job setup: columns and templates -->
+<section id="view-setup" class="view" hidden>
+  <header class="bar">
+    <button class="bar-btn" data-action="back">Cancel</button>
+    <h1 id="setup-heading">New job</h1>
+    <button class="bar-btn strong" id="setup-save">Save</button>
+  </header>
+  <main class="content">
+    <p id="setup-detected" class="notice" hidden></p>
+
+    <label class="field">
+      <span>Job name</span>
+      <input id="setup-title" type="text" autocomplete="off">
+    </label>
+
+    <div class="field">
+      <span>Columns (tap to insert into the field you're editing)</span>
+      <div id="setup-columns" class="chips"></div>
+    </div>
+
+    <label class="field">
+      <span>Subject name</span>
+      <input id="setup-name" type="text" autocomplete="off" spellcheck="false" data-template>
+    </label>
+
+    <label class="field">
+      <span>Group (team, class)</span>
+      <select id="setup-group"></select>
+    </label>
+
+    <label class="field">
+      <span>QR code content</span>
+      <input id="setup-qr" type="text" autocomplete="off" spellcheck="false" data-template>
+      <small>Use a column like <code>{Gallery Link}</code> for GotPhoto, or combine columns, e.g. <code>{Team}-{Number}</code>.</small>
+    </label>
+
+    <label class="field">
+      <span>QR code content for walk-ups</span>
+      <input id="setup-walkup" type="text" autocomplete="off" spellcheck="false" data-template>
+      <small><code>{#}</code> is the walk-up number (001, 002, ...) and <code>{name}</code> the subject name.
+        Walk-ups aren't in GotPhoto yet, so give them something you'll recognize in Lightroom.</small>
+    </label>
+
+    <h2 class="section-title">Preview</h2>
+    <ul id="setup-preview" class="preview"></ul>
+  </main>
+</section>
+
+<!-- Roster -->
+<section id="view-roster" class="view" hidden>
+  <header class="bar">
+    <button class="bar-btn" data-action="back">Jobs</button>
+    <h1 id="roster-title"></h1>
+    <button class="bar-btn" id="roster-menu-btn" aria-haspopup="true" aria-expanded="false">More</button>
+  </header>
+  <div id="roster-menu" class="menu" hidden>
+    <button id="menu-export">Export results (CSV)</button>
+    <label id="menu-add-pdf" class="menu-item">Add card PDFs<input id="add-pdf" type="file" accept=".pdf,application/pdf" multiple hidden></label>
+    <button id="menu-settings">Job settings</button>
+    <button id="menu-delete" class="danger">Delete job</button>
+  </div>
+  <div class="roster-tools">
+    <input id="search" type="search" placeholder="Search name, team or class" autocomplete="off" spellcheck="false" enterkeyhint="search">
+    <div class="segmented" role="tablist">
+      <button data-filter="todo" role="tab">To do <span></span></button>
+      <button data-filter="done" role="tab">Done <span></span></button>
+      <button data-filter="all" role="tab">All <span></span></button>
+    </div>
+  </div>
+  <main class="content roster">
+    <button id="import-warning" class="notice warn import-warning" hidden></button>
+    <details id="job-info" class="job-info" hidden>
+      <summary id="job-info-summary"></summary>
+      <dl id="job-info-body"></dl>
+    </details>
+    <div id="subject-list"></div>
+    <p id="no-subjects" class="muted" hidden></p>
+  </main>
+  <button id="add-walkup" class="fab">+ Walk-up</button>
+</section>
+
+<!-- Full-screen QR card -->
+<section id="view-qr" class="view qr-view" hidden>
+  <header class="bar light">
+    <button class="bar-btn" data-action="back">Roster</button>
+    <span></span>
+    <span id="qr-counter" class="bar-note"></span>
+  </header>
+  <main class="qr-main">
+    <div id="qr-name" class="qr-name"></div>
+    <div id="qr-group" class="qr-group"></div>
+    <div id="qr-code" class="qr-code" role="img"></div>
+    <div id="qr-text" class="qr-text"></div>
+  </main>
+  <footer class="qr-footer">
+    <button id="qr-done" class="btn primary big">Mark photographed</button>
+    <div id="qr-done-info" class="qr-done-info" hidden>
+      <span id="qr-done-time"></span>
+      <button id="qr-undo" class="btn small">Undo</button>
+    </div>
+  </footer>
+</section>
+
+<!-- Walk-up form -->
+<section id="view-walkup" class="view" hidden>
+  <header class="bar">
+    <button class="bar-btn" data-action="back">Cancel</button>
+    <h1>Add walk-up</h1>
+    <button class="bar-btn strong" id="walkup-save">Add</button>
+  </header>
+  <main class="content">
+    <form id="walkup-form" autocomplete="off"></form>
+    <p class="muted">The QR code will contain: <strong id="walkup-preview"></strong></p>
+  </main>
+</section>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<div id="busy" class="busy" role="alertdialog" aria-live="polite" hidden>
+  <div class="busy-box">
+    <div class="spinner"></div>
+    <div id="busy-text">Reading cards...</div>
+  </div>
+</div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="lib.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

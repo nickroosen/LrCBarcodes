@@ -1,0 +1,43 @@
+# Publishes the companion app (companion/) to GitHub Pages:
+# https://nickroosen.github.io/LrCBarcodes/
+name: Deploy companion app
+
+on:
+  push:
+    branches: [main]
+    paths: ["companion/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Test
+        run: node --test tests/companion.test.js
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: companion
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
