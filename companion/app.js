@@ -368,9 +368,35 @@
   function setupSource() {
     if (editingJobId) {
       const job = findJob(editingJobId);
-      return { title: job.title, headers: job.headers, rows: job.subjects.map(s => s.data), settings: job.settings };
+      return { title: job.title, headers: job.headers, rows: job.subjects.map(s => s.data), settings: job.settings, info: job.info };
     }
     return pendingImport;
+  }
+
+  const DETAIL_FIELDS = {
+    shootDate: '#setup-shoot-date',
+    organization: '#setup-organization',
+    address: '#setup-address',
+    contactName: '#setup-contact-name',
+    contactPhone: '#setup-contact-phone',
+    contactEmail: '#setup-contact-email',
+  };
+
+  function fillJobDetails(info) {
+    info = info || {};
+    const c = info.contact || {};
+    const values = {
+      shootDate: info.shootDate, organization: info.organization, address: (info.address || []).join('\n'),
+      contactName: c.name, contactPhone: c.phone, contactEmail: c.email,
+    };
+    for (const [key, sel] of Object.entries(DETAIL_FIELDS)) $(sel).value = values[key] || '';
+    $('#setup-details-note').hidden = !(info.pdfs && info.pdfs.some(p => p.pdf));
+  }
+
+  function readJobDetails() {
+    const details = {};
+    for (const [key, sel] of Object.entries(DETAIL_FIELDS)) details[key] = $(sel).value;
+    return details;
   }
 
   function renderSetup() {
@@ -378,6 +404,7 @@
     const settings = src.settings || L.detectSettings(src.headers, src.rows);
     $('#setup-heading').textContent = editingJobId ? 'Job settings' : 'New job';
     $('#setup-title').value = src.title;
+    fillJobDetails(src.info);
     $('#setup-name').value = settings.nameTemplate;
     $('#setup-qr').value = settings.qrTemplate;
     $('#setup-walkup').value = settings.walkupTemplate;
@@ -469,23 +496,31 @@
       job = L.createJob(title, src.headers, src.rows, settings);
       db.jobs.push(job);
     }
+    L.setJobDetails(job, readJobDetails());
     save();
+    const wasEditing = !!editingJobId;
     pendingImport = null;
     editingJobId = null;
-    // Replace the setup entry so Back from the roster goes home, not to setup.
-    go('roster', { jobId: job.id }, true);
+    if (wasEditing) {
+      // Settings were opened from the roster: return to that history entry.
+      back();
+    } else {
+      // Replace the setup entry so Back from the roster goes home, not to setup.
+      go('roster', { jobId: job.id }, true);
+    }
   });
 
   // ------------------------------------------------------------ roster
 
-  // Job details from the GotPhoto cover page: organization, shoot date,
-  // contact (with tap-to-call / email links) and a card count per PDF.
+  // Job details, from the GotPhoto cover page or typed in on the setup
+  // screen: organization, shoot date, contact (with tap-to-call / email
+  // links) and a card count per PDF.
   function renderJobInfo(job) {
     const panel = $('#job-info');
     const info = job.info;
-    panel.hidden = !info;
-    if (!info) return;
-    $('#job-info-summary').textContent = [info.organization || info.name, info.shootDate && 'Shoot ' + info.shootDate]
+    panel.hidden = !L.hasJobDetails(info);
+    if (panel.hidden) return;
+    $('#job-info-summary').textContent = [info.organization, info.shootDate && 'Shoot ' + info.shootDate]
       .filter(Boolean).join(' · ') || 'Job details';
 
     const body = $('#job-info-body');
@@ -498,8 +533,7 @@
     const c = info.contact || {};
     const phone = c.phone && el('a', { href: 'tel:' + c.phone.replace(/[^+\d]/g, ''), text: c.phone });
     const email = c.email && el('a', { href: 'mailto:' + c.email, text: c.email });
-    row('Job', [info.name, info.jobNumber && !String(info.name || '').includes(info.jobNumber) ? `(${info.jobNumber})` : '']
-      .filter(Boolean).join(' '));
+    if (info.jobNumber) row('GotPhoto job', info.jobNumber);
     row('Date of shoot', info.shootDate);
     row('Organization', info.organization);
     row('Address', ...(info.address || []));

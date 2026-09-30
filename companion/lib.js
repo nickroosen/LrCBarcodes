@@ -319,6 +319,29 @@
     return warnings.join('; ');
   }
 
+  // Job details typed in on the setup screen (for CSV and blank jobs, or to
+  // correct what a cover page said). Card PDF history is kept.
+  // details: { shootDate, organization, address (text, one line each),
+  //            contactName, contactPhone, contactEmail }
+  function setJobDetails(job, details) {
+    const info = job.info || { pdfs: [] };
+    const clean = v => String(v || '').trim();
+    info.shootDate = clean(details.shootDate);
+    info.organization = clean(details.organization);
+    info.address = clean(details.address).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    info.contact = { name: clean(details.contactName), phone: clean(details.contactPhone), email: clean(details.contactEmail) };
+    info.pdfs = info.pdfs || [];
+    job.info = info;
+    return info;
+  }
+
+  function hasJobDetails(info) {
+    if (!info) return false;
+    const c = info.contact || {};
+    return !!(info.shootDate || info.organization || (info.address && info.address.length)
+      || c.name || c.phone || c.email || info.jobNumber || (info.pdfs && info.pdfs.length));
+  }
+
   const CARD_HEADERS = ['Name', 'Class', 'Access Code', 'Card', 'Barcode', 'Gallery Link'];
 
   function cardRow(card) {
@@ -439,6 +462,7 @@
     detectDelimiter, parseCSV, toCSV,
     renderTemplate, templateColumns,
     detectSettings, describe, createJob, addWalkup, matches, progress, exportCSV,
-    parseCardPage, parseCoverPage, addCoverInfo, assignLinks, addCards, cardJobSettings, CARD_HEADERS,
+    parseCardPage, parseCoverPage, addCoverInfo, setJobDetails, hasJobDetails,
+    assignLinks, addCards, cardJobSettings, CARD_HEADERS,
   };
 });

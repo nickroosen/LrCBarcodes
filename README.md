@@ -149,6 +149,11 @@ works offline, which helps in gyms and on fields with no signal.
      `WALKUP-001 Priya Shah`.
 
    There's also **Start a job without a roster**, for walk-ups only.
+
+   For CSV and blank jobs, the setup screen asks for the same (optional) job
+   details a GotPhoto cover page provides: date of shoot, organization, address and
+   contact name, phone and email. You can edit them for any job, including card
+   imports, under **More › Job settings**.
 2. **On the day,** search for the subject by name, class, access code or barcode
    number, tap them, and photograph the full-screen QR code before photographing
    them. Tap **Mark photographed** to return to the list for the next subject. Use **+ Walk-up** for

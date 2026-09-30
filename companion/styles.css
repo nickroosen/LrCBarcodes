@@ -212,3 +212,15 @@ input:focus, select:focus, .btn:focus-visible, .card:focus-visible, .subject:foc
 .job-info dd { margin: 0; overflow-wrap: anywhere; }
 .job-info dd a { display: block; width: fit-content; min-height: 32px; line-height: 32px; }
 .import-warning { display: block; width: 100%; text-align: left; border: 0; font: inherit; cursor: pointer; margin-top: 4px; }
+textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 17px; resize: vertical;
+}
+textarea:focus { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; }
+input[type="tel"], input[type="email"] {
+  width: 100%; min-height: var(--tap); padding: 0 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 17px;
+}
+.field-grid { display: grid; gap: 0 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.section-title .optional { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.muted.small { font-size: 14px; margin: -2px 0 12px; }
