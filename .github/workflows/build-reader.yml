@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout ZXing-C++
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: zxing-cpp/zxing-cpp
           ref: ${{ inputs.zxing_version }}
@@ -39,7 +39,7 @@ jobs:
           build/example/Release/ZXingReader.exe -version
           build/example/Release/ZXingReader.exe -1 zxing/test/samples/code128-1/1.png
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ZXingReader-windows-x64
           path: |
