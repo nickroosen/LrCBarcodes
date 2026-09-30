@@ -1,4 +1,5 @@
-# Runs tests/run_tests.py against the bundled reader on each platform.
+# Runs the plug-in tests (against the bundled reader on each platform) and the
+# companion app tests.
 name: Tests
 
 on:
@@ -23,3 +24,9 @@ jobs:
       - run: pip install lupa segno
 
       - run: python tests/run_tests.py
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - run: node --test tests/companion.test.js

@@ -110,6 +110,45 @@ the frame width, but the Code 128 next to it needs full resolution unless the ca
 nearly fills the frame. Since usually only the card shots are rescanned, the extra
 time is small.
 
+## Companion app: QR cards on a tablet or phone
+
+Instead of printing a card for every subject, you can show each subject's QR code
+on a tablet or phone and photograph the screen. The plug-in reads a screen the
+same way it reads a printed card.
+
+**Open it at <https://nickroosen.github.io/LrCBarcodes/>**, then add it to the home
+screen (Safari: Share › Add to Home Screen; Chrome: menu › Install app). It then
+works offline, which helps in gyms and on fields with no signal.
+
+1. **Import a roster.** Use a CSV export from GotPhoto or any spreadsheet saved as
+   CSV (comma- or semicolon-separated). The app detects the name, team/class and
+   QR columns; for a GotPhoto export it uses the gallery link. You can change any
+   of them:
+   - **Subject name** and **QR code content** are templates, e.g.
+     `{First Name} {Last Name}` or `{Team}-{Jersey Number}`. Tap a column name to
+     insert it.
+   - **QR code content for walk-ups** is used for subjects added on the day, who
+     aren't in GotPhoto yet. By default it's `WALKUP-{#} {name}`, e.g.
+     `WALKUP-001 Priya Shah`.
+
+   There's also **Start a job without a roster**, for walk-ups only.
+2. **On the day,** search for the subject by name, team or class, tap them, and
+   photograph the full-screen QR code before photographing them. Tap **Mark
+   photographed** to return to the list for the next subject. Use **+ Walk-up** for
+   anyone not on the roster; a search that finds no one pre-fills their name.
+3. **Afterwards,** choose **More › Export results (CSV)**. The export has every
+   roster column plus the QR content, whether and when each subject was
+   photographed, and which subjects were walk-ups.
+
+**Privacy:** rosters are stored only in the browser on that device. Nothing is
+uploaded, and there's no account or server. On iPhone and iPad, Safari may clear a
+website's data after about a week of not being used, but not once the app is added
+to the home screen. Export results you need to keep.
+
+**Shooting tips:** turn the screen brightness up and avoid reflections. If the
+QR code shows moiré stripes, step back or zoom in slightly rather than filling the
+frame. The QR code always shows black on white, even in dark mode.
+
 ## Development
 
 ```
@@ -128,8 +167,13 @@ LrCBarcodes.lrdevplugin/
   Prefs.lua                 preference defaults
   bin/win/ZXingReader.exe   ZXing-C++ command-line reader (Windows x64)
   bin/mac/ZXingReader       ZXing-C++ command-line reader (macOS universal)
+companion/                  companion web app (GitHub Pages)
+  lib.js                    CSV parsing, templates, export (pure JS)
+  app.js                    UI
+  vendor/qrcode.js          qrcode-generator 2.0.4 (MIT)
 scripts/package.py          builds the release zip
-tests/run_tests.py          tests that run outside Lightroom
+tests/run_tests.py          plug-in tests that run outside Lightroom
+tests/companion.test.js     companion app tests (node --test)
 ```
 
 Logs are written to `Documents/LrClassicLogs/LrCBarcodes.log` when the reader
@@ -145,8 +189,14 @@ pip install lupa segno
 python tests/run_tests.py
 ```
 
-The **Tests** workflow runs them on Windows and macOS for every pull request and
-every push to `main`.
+For the companion app, run `node --test tests/companion.test.js`. To try it
+locally, serve the folder (e.g. `python -m http.server --directory companion`) and
+open <http://localhost:8000>.
+
+The **Tests** workflow runs both on Windows and macOS for every pull request and
+every push to `main`. The **Deploy companion app** workflow publishes `companion/`
+to GitHub Pages whenever it changes on `main`. When you change the app's files,
+bump `VERSION` in `companion/sw.js` so installed copies pick up the update.
 
 ### Rebuilding the barcode reader
 
