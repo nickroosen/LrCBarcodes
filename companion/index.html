@@ -72,6 +72,39 @@
       <input id="setup-title" type="text" autocomplete="off">
     </label>
 
+    <h2 class="section-title">Job details <span class="optional">optional</span></h2>
+    <p id="setup-details-note" class="muted small" hidden>Filled in from the GotPhoto cover page. Changes here only affect this device.</p>
+    <div class="field-grid">
+      <label class="field">
+        <span>Date of shoot</span>
+        <input id="setup-shoot-date" type="text" autocomplete="off" placeholder="e.g. 10/07/2026">
+      </label>
+      <label class="field">
+        <span>Organization</span>
+        <input id="setup-organization" type="text" autocomplete="organization" placeholder="School, club or league">
+      </label>
+    </div>
+    <label class="field">
+      <span>Address</span>
+      <textarea id="setup-address" rows="3" autocomplete="street-address" placeholder="One line per row"></textarea>
+    </label>
+    <div class="field-grid">
+      <label class="field">
+        <span>Contact name</span>
+        <input id="setup-contact-name" type="text" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Contact phone</span>
+        <input id="setup-contact-phone" type="tel" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Contact email</span>
+        <input id="setup-contact-email" type="email" autocomplete="off" autocapitalize="off">
+      </label>
+    </div>
+
+    <h2 class="section-title">Names and QR codes</h2>
+
     <div class="field">
       <span>Columns (tap to insert into the field you're editing)</span>
       <div id="setup-columns" class="chips"></div>

@@ -224,3 +224,30 @@ test('records cover info on the job and checks the card count', () => {
   assert.equal(lib.addCoverInfo(job, lib.parseCoverPage(coverPage({ pdf: '9', quantity: 1 })), other),
     'PDF #9 is from a different GotPhoto job (JOB00002, not JOB00003)');
 });
+
+test('job details typed in on the setup screen', () => {
+  const job = lib.createJob('Spring soccer', ['Name'], [], lib.detectSettings(['Name'], []), 0);
+  assert.equal(lib.hasJobDetails(job.info), false, 'new CSV/blank jobs start without details');
+
+  lib.setJobDetails(job, {
+    shootDate: ' 04/18/2027 ', organization: 'Eastside Youth Soccer', address: 'Field 3\r\n\r\n  100 Park Ave  \nDenver, CO',
+    contactName: 'Sam Coach', contactPhone: '555 0100', contactEmail: 'coach@example.org',
+  });
+  assert.deepEqual(job.info, {
+    pdfs: [], shootDate: '04/18/2027', organization: 'Eastside Youth Soccer',
+    address: ['Field 3', '100 Park Ave', 'Denver, CO'],
+    contact: { name: 'Sam Coach', phone: '555 0100', email: 'coach@example.org' },
+  });
+  assert.equal(lib.hasJobDetails(job.info), true);
+
+  // Editing a card job keeps its PDF history and job number.
+  const cardJob = lib.createJob('x', lib.CARD_HEADERS, [], lib.cardJobSettings(), 0);
+  const cards = lib.parseCardPage(cardPage([{ card: '1.1', code: 'AAAA1111', digits: '111111111111111' }]));
+  lib.addCoverInfo(cardJob, lib.parseCoverPage(coverPage({ quantity: 1 })), cards);
+  lib.setJobDetails(cardJob, { organization: 'Corrected name', contactPhone: '+1 555 010 0100' });
+  assert.equal(cardJob.info.organization, 'Corrected name');
+  assert.equal(cardJob.info.contact.phone, '+1 555 010 0100');
+  assert.equal(cardJob.info.jobNumber, 'JOB00003');
+  assert.equal(cardJob.info.pdfs.length, 1);
+  assert.equal(lib.hasJobDetails(lib.setJobDetails(lib.createJob('y', [], [], {}, 0), {})), false, 'all blank');
+});
