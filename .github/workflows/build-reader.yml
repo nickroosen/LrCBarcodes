@@ -1,6 +1,6 @@
-# Builds the Windows barcode reader (ZXingReader.exe from ZXing-C++) that ships in
-# LrCBarcodes.lrdevplugin/bin/win. Run manually, download the artifact, and commit
-# the exe when upgrading ZXing-C++.
+# Builds the barcode readers (ZXingReader from ZXing-C++) that ship in
+# LrCBarcodes.lrdevplugin/bin/win and bin/mac. Run manually, download the
+# artifacts, and commit the binaries when upgrading ZXing-C++.
 name: Build barcode reader
 
 on:
@@ -45,3 +45,48 @@ jobs:
           path: |
             build/example/Release/ZXingReader.exe
             zxing/LICENSE
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout ZXing-C++
+        uses: actions/checkout@v7
+        with:
+          repository: zxing-cpp/zxing-cpp
+          ref: ${{ inputs.zxing_version }}
+          path: zxing
+
+      # Universal binary (Apple Silicon + Intel). Only links against system libraries.
+      - name: Configure
+        run: >
+          cmake -S zxing -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          -DBUILD_SHARED_LIBS=OFF
+          -DZXING_READERS=ON -DZXING_WRITERS=OFF
+          -DZXING_C_API=OFF -DZXING_EXAMPLES=ON
+          -DZXING_DEPENDENCIES=GITHUB
+
+      - name: Build
+        run: cmake --build build --target ZXingReader -j 4
+
+      - name: Smoke test
+        run: |
+          lipo -info build/example/ZXingReader
+          otool -L build/example/ZXingReader
+          build/example/ZXingReader -version
+          build/example/ZXingReader -1 zxing/test/samples/code128-1/1.png
+
+      # Zip to preserve the executable bit through the artifact upload.
+      - name: Package
+        run: |
+          mkdir out
+          cp build/example/ZXingReader out/
+          cp zxing/LICENSE out/
+          cd out && zip ../ZXingReader-macos-universal.zip ZXingReader LICENSE
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ZXingReader-macos-universal
+          path: ZXingReader-macos-universal.zip
