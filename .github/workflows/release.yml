@@ -1,0 +1,42 @@
+# Publishes a GitHub release with the installable plug-in zip when a version tag
+# is pushed, e.g.:  git tag v2.1.0 && git push origin v2.1.0
+# The tag must match VERSION in LrCBarcodes.lrdevplugin/Info.lua.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Test
+        run: |
+          pip install lupa segno
+          python tests/run_tests.py
+
+      - name: Package
+        id: package
+        run: |
+          zip=$(python scripts/package.py | cut -d' ' -f1)
+          version=$(basename "$zip" .zip | sed 's/^LrCBarcodes-//')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Info.lua version $version"
+            exit 1
+          fi
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" --title "LrC Barcodes $GITHUB_REF_NAME" --generate-notes

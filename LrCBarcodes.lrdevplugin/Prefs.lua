@@ -6,6 +6,7 @@ local defaults = {
     previewSize = 2048,
     skipAlreadyScanned = false,
     fullSizeRescan = true,
+    createSmartCollections = true,
 
     propagateSource = "barcodeValue",
     propagateDestination = "title",

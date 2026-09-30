@@ -5,7 +5,8 @@ what it reads in the catalog, and copies those values onto the photos that follo
 The main use is product photography: shoot a barcode card, then the product, and
 let the plug-in label the product shots for you.
 
-**Platform:** Windows (Lightroom Classic 6 or later). macOS support is planned.
+**Platforms:** Windows and macOS (Apple Silicon and Intel), Lightroom Classic 6 or
+later. The macOS version is new and hasn't been tested inside Lightroom yet.
 
 ## Credits
 
@@ -16,14 +17,34 @@ let the plug-in label the product shots for you.
 - **[Okomikeruko/LrCBarcodes](https://github.com/Okomikeruko/LrCBarcodes)** by Lee
   Whittaker. This repository is a fork of that first open-source recreation.
 - Barcode decoding by **[ZXing-C++](https://github.com/zxing-cpp/zxing-cpp)**
-  (Apache License 2.0). It's bundled as `bin/win/ZXingReader.exe`, with its
-  license alongside it.
+  (Apache License 2.0). It's bundled as `bin/win/ZXingReader.exe` and
+  `bin/mac/ZXingReader`, with its license alongside each.
 
 ## Installation
 
-1. Download or clone this repository.
-2. In Lightroom Classic, open **File › Plug-in Manager** (Ctrl+Alt+Shift+,).
-3. Click **Add** and select the `LrCBarcodes.lrdevplugin` folder.
+1. Download `LrCBarcodes-<version>.zip` from the
+   [latest release](https://github.com/nickroosen/LrCBarcodes/releases/latest) and
+   unzip it somewhere permanent, e.g. `Documents\Lightroom Plug-ins` on Windows or
+   `~/Documents/Lightroom Plug-ins` on a Mac. Lightroom loads the plug-in from
+   wherever you put it, so don't leave it in Downloads.
+2. In Lightroom Classic, open **File › Plug-in Manager** (Ctrl+Alt+Shift+, on
+   Windows, Cmd+Option+Shift+, on a Mac).
+3. Click **Add** and select the `LrCBarcodes.lrplugin` folder.
+
+To upgrade, replace the folder with the new version and click **Reload Plug-in**
+in the Plug-in Manager (or restart Lightroom).
+
+**macOS note:** the bundled reader isn't signed with an Apple Developer ID. The
+plug-in clears the download quarantine flag on it the first time it runs, so
+Gatekeeper shouldn't block it. If scanning still fails with a permissions or
+"cannot be opened" error, run this once in Terminal, pointing at the folder:
+
+```
+xattr -dr com.apple.quarantine ~/Documents/Lightroom\ Plug-ins/LrCBarcodes.lrplugin
+```
+
+To run the development version from a clone of this repository instead, add the
+`LrCBarcodes.lrdevplugin` folder.
 
 ## Workflow
 
@@ -60,11 +81,14 @@ let the plug-in label the product shots for you.
    blank instead of getting the previous subject's value, and the preview lists
    those cards so you can fix them. You can type the value into the source field
    by hand, or rescan with a larger preview size.
-4. **Clean up.** Filter the Library by *Barcode Status = Found* to find (and remove
-   or reject) the barcode card shots.
+4. **Clean up.** Detect creates two smart collections in an **LrC Barcodes**
+   collection set: **Barcode Found** (the card shots, e.g. to reject or remove
+   them) and **No Barcode** (everything else). They cover the whole catalog, update
+   automatically, and can be turned off in the Detect dialog. You can also filter
+   the Library by *Barcode Status*.
 
 Propagation can be undone with **Edit › Undo**. **Clear Barcode Data...** removes
-the three barcode fields from the selected photos.
+all barcode fields from the selected photos.
 
 ### Supported symbologies
 
@@ -98,12 +122,17 @@ LrCBarcodes.lrdevplugin/
   Propagation.lua           grouping and numbering rules (pure Lua)
   MetadataProvider.lua      custom metadata fields
   MetadataTagsetFactory.lua Metadata panel preset
+  SmartCollections.lua      "Barcode Found" / "No Barcode" smart collections
   PluginInfoProvider.lua    Plug-in Manager settings
   Prefs.lua                 preference defaults
-  bin/win/ZXingReader.exe   ZXing-C++ command-line reader
+  bin/win/ZXingReader.exe   ZXing-C++ command-line reader (Windows x64)
+  bin/mac/ZXingReader       ZXing-C++ command-line reader (macOS universal)
+scripts/package.py          builds the release zip
+tests/run_tests.py          tests that run outside Lightroom
 ```
 
-Logs are written to `Documents\LrClassicLogs\LrCBarcodes.log`.
+Logs are written to `Documents/LrClassicLogs/LrCBarcodes.log` when the reader
+reports an error.
 
 ### Tests
 
@@ -115,10 +144,32 @@ pip install lupa segno
 python tests/run_tests.py
 ```
 
+The **Tests** workflow runs them on Windows and macOS for every pull request and
+every push to `main`.
+
 ### Rebuilding the barcode reader
 
 Run the **Build barcode reader** GitHub Actions workflow (Actions tab › Run
-workflow), download the artifact, and replace `bin/win/ZXingReader.exe` with it.
+workflow). It builds both readers; download the two artifacts and replace
+`bin/win/ZXingReader.exe` and `bin/mac/ZXingReader`. The Mac artifact is a zip,
+so the executable bit survives the download. After replacing the Mac reader, keep
+it executable in git with `git update-index --chmod=+x
+LrCBarcodes.lrdevplugin/bin/mac/ZXingReader`.
+
+### Releasing
+
+1. Bump `VERSION` in `Info.lua` (e.g. `major = 2, minor = 1, revision = 0`).
+2. Commit, then tag and push the tag:
+
+   ```
+   git tag v2.1.0
+   git push origin v2.1.0
+   ```
+
+The **Release** workflow runs the tests, checks that the tag matches `Info.lua`,
+builds `LrCBarcodes-<version>.zip` with `scripts/package.py`, and publishes a
+GitHub release with it. To build the zip locally, run `python scripts/package.py`;
+the output goes to `dist/`.
 
 ## License
 
