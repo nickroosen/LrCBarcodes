@@ -173,3 +173,54 @@ test('card jobs: names fall back to the card number, duplicates are skipped', ()
   assert.equal(exported['Gallery Link'], 'https://s.gotphoto.com/gc/a/');
   assert.equal(exported['Barcode'], '111111111111111');
 });
+
+// Cover page text in PDF.js reading order (the page is rotated, so only the
+// order matters). Details are made up.
+function coverPage({ pdf = '1', quantity = 4, name = 'Lincoln Elementary (JOB00007) Fall', created = '09/16/2026 14:43' } = {}) {
+  return ['Password Cards', '', `PDF #${pdf}`, `Quantity: ${quantity}`, `Created: ${created}`, `Name: ${name}`,
+    'Date of shoot: 10/07/2026', 'Organization: Lincoln Elementary', 'Pat Rivera', '123 Main St', 'Springfield, CO 80000',
+    'Contact:', 'Pat Rivera', '+1 555 010 0199', 'pat.rivera@example.org', '', 'Print only once!',
+    'How it works on location', 'Photo of password card', 'Take a photo of one QR password',
+  ].map((str, i) => ({ str, x: 500 - i * 16, y: 34 }));
+}
+
+test('parses the GotPhoto cover page', () => {
+  assert.deepEqual(lib.parseCoverPage(coverPage()), {
+    pdf: '1', quantity: 4, created: '09/16/2026 14:43', name: 'Lincoln Elementary (JOB00007) Fall',
+    shootDate: '10/07/2026', organization: 'Lincoln Elementary',
+    address: ['Pat Rivera', '123 Main St', 'Springfield, CO 80000'],
+    contact: { name: 'Pat Rivera', phone: '+1 555 010 0199', email: 'pat.rivera@example.org' },
+  });
+  assert.equal(lib.parseCoverPage(cardPage([{ card: '1.1', code: 'AAAA1111', digits: '111111111111111' }])), null, 'card pages are not covers');
+  assert.equal(lib.parseCardPage(coverPage()).length, 0, 'covers have no cards');
+});
+
+test('records cover info on the job and checks the card count', () => {
+  const job = lib.createJob('x', lib.CARD_HEADERS, [], lib.cardJobSettings(), 0);
+  const cards = lib.parseCardPage(cardPage([
+    { card: '1.1', code: 'AAAA1111', digits: '111111111111111', name: 'A', group: 'G' },
+    { card: '1.2', code: 'BBBB2222', digits: '222222222222222', name: 'B', group: 'G' },
+  ]));
+  assert.equal(lib.addCoverInfo(job, lib.parseCoverPage(coverPage({ quantity: 2 })), cards), '');
+  assert.equal(job.info.name, 'Lincoln Elementary (JOB00007) Fall');
+  assert.equal(job.info.jobNumber, 'JOB00003');
+  assert.equal(job.info.contact.phone, '+1 555 010 0199');
+  assert.deepEqual(job.info.pdfs, [{ pdf: '1', quantity: 2, created: '09/16/2026 14:43', found: 2 }]);
+
+  // A second PDF adds an entry and warns when cards are missing.
+  const warning = lib.addCoverInfo(job, lib.parseCoverPage(coverPage({ pdf: '2', quantity: 3, name: 'Other name' })), cards.slice(0, 1));
+  assert.equal(warning, 'PDF #2 should have 3 cards, but only 1 was found');
+  assert.equal(job.info.name, 'Lincoln Elementary (JOB00007) Fall', 'first PDF sets the job details');
+  assert.equal(job.info.pdfs.length, 2);
+
+  // Re-importing the same PDF replaces its entry.
+  lib.addCoverInfo(job, lib.parseCoverPage(coverPage({ pdf: '2', quantity: 3, name: 'Other name' })), cards.concat(cards.slice(0, 1)));
+  assert.equal(job.info.pdfs.length, 2);
+  assert.equal(job.info.pdfs[1].found, 3);
+
+  // PDFs from another GotPhoto job are flagged.
+  const other = lib.parseCardPage(cardPage([{ card: '1.1', code: 'CCCC3333', digits: '333333333333333' }]))
+    .map(c => Object.assign(c, { job: 'JOB00002' }));
+  assert.equal(lib.addCoverInfo(job, lib.parseCoverPage(coverPage({ pdf: '9', quantity: 1 })), other),
+    'PDF #9 is from a different GotPhoto job (JOB00002, not JOB00003)');
+});

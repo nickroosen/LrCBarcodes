@@ -249,6 +249,76 @@
     return cards.filter(c => !c.link).length;
   }
 
+  // Every card PDF starts with a "Password Cards" cover page listing the job:
+  //   Password Cards / PDF #1 / Quantity: 4 / Created: ... / Name: ... /
+  //   Date of shoot: ... / Organization: ... / <address lines> /
+  //   Contact: / <name> / <phone> / <email> / Print only once!
+  // followed by GotPhoto's instructions. The page is rotated, so this works
+  // from reading order (items as PDF.js returns them), not positions.
+  // Returns null if the page isn't a cover.
+  function parseCoverPage(items) {
+    const lines = items.map(it => String(it.str || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const start = lines.findIndex(l => /^password cards$/i.test(l));
+    if (start < 0) return null;
+    const cover = {
+      pdf: '', quantity: null, created: '', name: '', shootDate: '', organization: '',
+      address: [], contact: { name: '', phone: '', email: '' },
+    };
+    const labels = {
+      'quantity': v => { cover.quantity = parseInt(v, 10) || null; },
+      'created': v => { cover.created = v; },
+      'name': v => { cover.name = v; },
+      'date of shoot': v => { cover.shootDate = v; },
+      'organization': v => { cover.organization = v; },
+    };
+    let section = 'header';
+    for (const line of lines.slice(start + 1)) {
+      if (/^(print only once|how it works)/i.test(line)) break;
+      const pdf = /^PDF\s*#\s*(\d+)$/i.exec(line);
+      if (pdf) { cover.pdf = pdf[1]; continue; }
+      if (/^contact:?$/i.test(line)) { section = 'contact'; continue; }
+      const kv = /^([A-Za-z ]+):\s*(.*)$/.exec(line);
+      if (kv && labels[kv[1].trim().toLowerCase()] && section === 'header') {
+        labels[kv[1].trim().toLowerCase()](kv[2].trim());
+        if (kv[1].trim().toLowerCase() === 'organization') section = 'address';
+        continue;
+      }
+      if (section === 'address') cover.address.push(line);
+      else if (section === 'contact') {
+        if (/@/.test(line) && !cover.contact.email) cover.contact.email = line;
+        else if (/^\+?[\d\s()./-]{6,}$/.test(line) && !cover.contact.phone) cover.contact.phone = line;
+        else if (!cover.contact.name) cover.contact.name = line;
+      }
+    }
+    return cover;
+  }
+
+  // Records a card PDF's cover (and the cards found in it) on the job.
+  // Returns a warning if the PDF held fewer cards than its cover says, or if
+  // it belongs to a different GotPhoto job than the cards already imported.
+  function addCoverInfo(job, cover, cards) {
+    const info = job.info || (job.info = { pdfs: [] });
+    const found = cards.length;
+    if (cover) {
+      for (const key of ['name', 'shootDate', 'organization']) if (!info[key] && cover[key]) info[key] = cover[key];
+      if (!(info.address && info.address.length) && cover.address.length) info.address = cover.address.slice();
+      if (!info.contact || !(info.contact.name || info.contact.phone || info.contact.email)) info.contact = Object.assign({}, cover.contact);
+    }
+    const jobNumber = cards.map(c => c.job).find(Boolean);
+    const otherJob = jobNumber && info.jobNumber && jobNumber !== info.jobNumber;
+    if (jobNumber && !info.jobNumber) info.jobNumber = jobNumber;
+    const entry = { pdf: cover ? cover.pdf : '', quantity: cover ? cover.quantity : null, created: cover ? cover.created : '', found };
+    const i = info.pdfs.findIndex(p => p.pdf && p.pdf === entry.pdf && p.created === entry.created);
+    if (i >= 0) info.pdfs[i] = entry; else info.pdfs.push(entry);
+    const label = entry.pdf ? `PDF #${entry.pdf}` : 'A PDF';
+    const warnings = [];
+    if (otherJob) warnings.push(`${label} is from a different GotPhoto job (${jobNumber}, not ${info.jobNumber})`);
+    if (entry.quantity != null && found < entry.quantity) {
+      warnings.push(`${label} should have ${entry.quantity} cards, but only ${found} ${found === 1 ? 'was' : 'were'} found`);
+    }
+    return warnings.join('; ');
+  }
+
   const CARD_HEADERS = ['Name', 'Class', 'Access Code', 'Card', 'Barcode', 'Gallery Link'];
 
   function cardRow(card) {
@@ -369,6 +439,6 @@
     detectDelimiter, parseCSV, toCSV,
     renderTemplate, templateColumns,
     detectSettings, describe, createJob, addWalkup, matches, progress, exportCSV,
-    parseCardPage, assignLinks, addCards, cardJobSettings, CARD_HEADERS,
+    parseCardPage, parseCoverPage, addCoverInfo, assignLinks, addCards, cardJobSettings, CARD_HEADERS,
   };
 });

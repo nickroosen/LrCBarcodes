@@ -149,7 +149,11 @@
       list.append(el('li', null, [
         el('button', { class: 'card', onclick: () => go('roster', { jobId: job.id }) }, [
           el('div', { class: 'card-title', text: job.title }),
-          el('div', { class: 'card-meta', text: `${p.done} of ${p.total} photographed · ${formatDate(job.created)}` }),
+          el('div', { class: 'card-meta', text: [
+            job.info && job.info.organization,
+            job.info && job.info.shootDate ? 'shoot ' + job.info.shootDate : formatDate(job.created),
+            `${p.done} of ${p.total} photographed`,
+          ].filter(Boolean).join(' · ') }),
           bar,
         ]),
       ]));
@@ -237,6 +241,8 @@
     });
   }
 
+  // Returns { cover, cards } for one page. The cover page (job details) has
+  // no cards, so it is never rendered.
   async function readCardPage(page) {
     const base = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
@@ -245,12 +251,12 @@
       return { str: it.str, x, y };
     });
     const cards = L.parseCardPage(items);
-    if (!cards.length) return cards;  // e.g. the cover page
+    if (!cards.length) return { cover: L.parseCoverPage(items), cards };
     // Render at 2x; retry at 3x if any card's QR code wasn't found.
     for (const scale of [2, 3]) {
       if (L.assignLinks(cards, await decodePageQRs(page, scale)) === 0) break;
     }
-    return cards;
+    return { cover: null, cards };
   }
 
   function busy(message) {
@@ -263,6 +269,7 @@
     files = Array.from(files || []);
     if (!files.length) return;
     const cards = [];
+    const pdfs = [];  // { cover, cards } per file
     const failed = [];
     try {
       busy('Loading PDF reader...');
@@ -276,12 +283,17 @@
           failed.push(file.name);
           continue;
         }
+        const pdf = { cover: null, cards: [] };
         for (let p = 1; p <= doc.numPages; p++) {
           busy(`Reading ${files.length > 1 ? `file ${fileIndex + 1} of ${files.length}, ` : ''}page ${p} of ${doc.numPages}...`);
           const page = await doc.getPage(p);
-          cards.push(...await readCardPage(page));
+          const result = await readCardPage(page);
+          if (result.cover && !pdf.cover) pdf.cover = result.cover;
+          pdf.cards.push(...result.cards);
+          cards.push(...result.cards);
           page.cleanup();
         }
+        if (pdf.cards.length) pdfs.push(pdf);
         await loading.destroy();
       }
     } catch (err) {
@@ -298,7 +310,8 @@
 
     let job = jobId ? findJob(jobId) : null;
     if (!job) {
-      const title = files[0].name
+      const cover = pdfs.map(p => p.cover).find(c => c && c.name);
+      const title = cover ? cover.name : files[0].name
         .replace(/\.pdf$/i, '')
         .replace(/^Password_Card_\d+_\d+_\d+_/i, '')
         .replace(/_/g, ' ')
@@ -307,6 +320,7 @@
       db.jobs.push(job);
     }
     const result = L.addCards(job, cards);
+    const warnings = pdfs.map(p => L.addCoverInfo(job, p.cover, p.cards)).filter(Boolean);
     save();
 
     const noLink = cards.filter(c => !c.link).length;
@@ -317,6 +331,8 @@
     if (noLink) parts.push(`${noLink} QR code${noLink === 1 ? '' : 's'} could not be read`);
     if (failed.length) parts.push('could not open ' + failed.join(', '));
     toast(parts.join('; ') + '.');
+    // Problems that could put the wrong cards in the job stay on screen.
+    importWarning = warnings.length ? { jobId: job.id, text: warnings.join('. ') + '.' } : null;
 
     if (jobId) renderRoster(job);
     else go('roster', { jobId: job.id });
@@ -462,8 +478,52 @@
 
   // ------------------------------------------------------------ roster
 
+  // Job details from the GotPhoto cover page: organization, shoot date,
+  // contact (with tap-to-call / email links) and a card count per PDF.
+  function renderJobInfo(job) {
+    const panel = $('#job-info');
+    const info = job.info;
+    panel.hidden = !info;
+    if (!info) return;
+    $('#job-info-summary').textContent = [info.organization || info.name, info.shootDate && 'Shoot ' + info.shootDate]
+      .filter(Boolean).join(' · ') || 'Job details';
+
+    const body = $('#job-info-body');
+    body.replaceChildren();
+    const row = (label, ...values) => {
+      values = values.filter(Boolean);
+      if (!values.length) return;
+      body.append(el('dt', { text: label }), el('dd', null, values.map(v => typeof v === 'string' ? el('div', { text: v }) : v)));
+    };
+    const c = info.contact || {};
+    const phone = c.phone && el('a', { href: 'tel:' + c.phone.replace(/[^+\d]/g, ''), text: c.phone });
+    const email = c.email && el('a', { href: 'mailto:' + c.email, text: c.email });
+    row('Job', [info.name, info.jobNumber && !String(info.name || '').includes(info.jobNumber) ? `(${info.jobNumber})` : '']
+      .filter(Boolean).join(' '));
+    row('Date of shoot', info.shootDate);
+    row('Organization', info.organization);
+    row('Address', ...(info.address || []));
+    row('Contact', c.name, phone, email);
+    row('Card PDFs', ...(info.pdfs || []).map(p => {
+      const total = p.quantity != null ? p.quantity : p.found;
+      const count = (p.quantity != null ? `${p.found} of ${p.quantity}` : `${p.found}`) + (total === 1 ? ' card' : ' cards');
+      return `${p.pdf ? 'PDF #' + p.pdf + ': ' : ''}${count}${p.created ? ', created ' + p.created : ''}`;
+    }));
+  }
+
+  let importWarning = null;  // { jobId, text } from the last card import
+
+  $('#import-warning').addEventListener('click', () => {
+    importWarning = null;
+    $('#import-warning').hidden = true;
+  });
+
   function renderRoster(job) {
     $('#roster-title').textContent = job.title;
+    const warning = $('#import-warning');
+    warning.hidden = !(importWarning && importWarning.jobId === job.id);
+    if (!warning.hidden) warning.textContent = importWarning.text + ' (Tap to dismiss.)';
+    renderJobInfo(job);
     const query = $('#search').value;
 
     const counts = { todo: 0, done: 0, all: job.subjects.length };

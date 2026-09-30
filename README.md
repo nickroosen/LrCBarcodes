@@ -130,6 +130,14 @@ works offline, which helps in gyms and on fields with no signal.
    all happens on the device. Unnamed password cards appear as e.g.
    `Card 2.1 · ZFC98L4W`. Adding a PDF twice doesn't duplicate cards.
 
+   The **Password Cards** cover page at the start of each PDF supplies the job
+   details, shown in a panel at the top of the roster: job name (used as the job's
+   title), date of shoot, organization and address, and the contact's name, phone
+   and email (tap to call or email). It also lists each PDF with its card count.
+   You get a warning that stays on screen until you dismiss it if a PDF has fewer
+   cards than its cover says, or if it belongs to a different GotPhoto job than the
+   cards already imported.
+
    You can also **import a roster (CSV)** from any spreadsheet (comma- or
    semicolon-separated) for jobs without GotPhoto cards. The app detects the name,
    team/class and QR columns; you can change them:

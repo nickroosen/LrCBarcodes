@@ -202,3 +202,13 @@ input:focus, select:focus, .btn:focus-visible, .card:focus-visible, .subject:foc
 .spinner { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 3px solid var(--border);
   border-top-color: var(--accent); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.job-info { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  margin: 4px 0 8px; }
+.job-info summary { min-height: var(--tap); display: flex; align-items: center; padding: 0 14px;
+  font-weight: 600; cursor: pointer; list-style-position: inside; }
+.job-info dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; padding: 4px 14px 14px; }
+.job-info dt { color: var(--muted); font-size: 14px; }
+.job-info dd { margin: 0; overflow-wrap: anywhere; }
+.job-info dd a { display: block; width: fit-content; min-height: 32px; line-height: 32px; }
+.import-warning { display: block; width: 100%; text-align: left; border: 0; font: inherit; cursor: pointer; margin-top: 4px; }
