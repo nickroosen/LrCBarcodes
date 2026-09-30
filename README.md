@@ -48,10 +48,11 @@ To run the development version from a clone of this repository instead, add the
 
 ## Workflow
 
-1. **Shoot.** Photograph a card showing the product's barcode or QR code, then the
-   product. Repeat for each product.
+1. **Shoot.** Before each subject (a player, a student, a team), photograph their
+   barcode or QR card, e.g. a GotPhoto or other volume-workflow subject card. Then
+   photograph the subject. Repeat for each subject.
 2. **Detect.** Select the photos and choose **Library › Plug-in Extras › Detect
-   Barcodes...** (also under **File › Plug-in Extras**). The plug-in fills in three
+   Barcodes...** (also under **File › Plug-in Extras**). The plug-in fills in these
    metadata fields, visible in the Metadata panel under the *LrC Barcodes* preset:
    - **Barcode Status**: *Found*, *Not Found* or *Read Error*
    - **Barcode Type**: e.g. *QR Code*, *EAN-13*, *Code 128*

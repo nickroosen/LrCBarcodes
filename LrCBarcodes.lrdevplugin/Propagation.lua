@@ -3,7 +3,8 @@ Metadata propagation planning (pure Lua, no Lightroom imports).
 
 Given photos in shooting order, every photo with a non-empty source value starts a
 new group; that value is copied to the photos that follow until the next one.
-Typical use: shoot a barcode card, then the product; repeat for each product.
+Typical use (volume photography): shoot a subject's barcode/QR card, then the
+subject; repeat for each subject.
 ]]
 
 local Propagation = {}
