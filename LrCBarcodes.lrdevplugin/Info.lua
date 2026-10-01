@@ -32,5 +32,5 @@ return {
     -- Library > Plug-in Extras
     LrLibraryMenuItems = menuItems,
 
-    VERSION = { major = 2, minor = 0, revision = 0, build = 0 },
+    VERSION = { major = 2, minor = 1, revision = 0, build = 0 },
 }
