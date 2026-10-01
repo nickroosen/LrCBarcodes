@@ -8,6 +8,10 @@ let the plug-in label the subjects for you.
 **Platforms:** Windows and macOS (Apple Silicon and Intel), Lightroom Classic 6 or
 later. The macOS version is new and hasn't been tested inside Lightroom yet.
 
+**Companion app:** <https://nickroosen.github.io/LrCBarcodes/>. It shows each
+subject's QR code on a tablet or phone for the card shot, and imports GotPhoto QR
+card PDFs. See [Companion app](#companion-app-qr-cards-on-a-tablet-or-phone).
+
 ## Credits
 
 - The original **[LR Barcodes](https://www.capturemonkey.com/barcodes/)** by
