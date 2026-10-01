@@ -11,6 +11,7 @@ local Prefs = require 'Prefs'
 local ReaderOutput = require 'ReaderOutput'
 local Scanner = require 'Scanner'
 local SmartCollections = require 'SmartCollections'
+local SubjectStore = require 'SubjectStore'
 
 local function plural(n, word)
     return n .. " " .. word .. (n == 1 and "" or "s")
@@ -60,12 +61,19 @@ local function showOptionsDialog(context, photoCount)
     return props
 end
 
-local function summarize(total, counts, skipped, failures, canceled)
+local function summarize(total, counts, skipped, failures, canceled, subjects)
     local lines = {
         "Scanned " .. plural(total, "photo") .. ":",
         "    " .. counts[Scanner.STATUS_FOUND] .. " with a barcode",
         "    " .. counts[Scanner.STATUS_NOT_FOUND] .. " without a barcode",
     }
+    if subjects then
+        local line = string.format("    %d matched a subject in the subject list", subjects.matched)
+        if subjects.unmatched > 0 then
+            line = line .. string.format(" (%d not in the list)", subjects.unmatched)
+        end
+        table.insert(lines, line)
+    end
     if counts[Scanner.STATUS_ERROR] > 0 then
         table.insert(lines, "    " .. counts[Scanner.STATUS_ERROR] .. " could not be read")
     end
@@ -144,6 +152,10 @@ local function detectBarcodes(context)
     local scanned = 0
     local canceled = false
 
+    -- Match new scans against the loaded subject list, if there is one.
+    local subjectList = SubjectStore.current()
+    local subjects = subjectList and { matched = 0, unmatched = 0 } or nil
+
     for first = 1, #photos, Scanner.batchSize do
         if progress:isCanceled() then
             canceled = true
@@ -186,6 +198,15 @@ local function detectBarcodes(context)
                 for _, id in ipairs(ReaderOutput.FIELDS) do
                     photo:setPropertyForPlugin(_PLUGIN, id, fields[id])
                 end
+                -- Only card shots are matched; subject details that Propagate
+                -- copied onto other photos are left alone.
+                if subjectList and fields.barcodeValue then
+                    if SubjectStore.apply(subjectList, photo, fields.barcodeValue) then
+                        subjects.matched = subjects.matched + 1
+                    else
+                        subjects.unmatched = subjects.unmatched + 1
+                    end
+                end
             end
         end, { timeout = 30 })
 
@@ -209,7 +230,7 @@ local function detectBarcodes(context)
     end
 
     LrDialogs.message("Barcode Detection Complete",
-                      summarize(scanned, counts, skipped, failures, canceled),
+                      summarize(scanned, counts, skipped, failures, canceled, subjects),
                       #failures > 0 and "warning" or "info")
 end
 

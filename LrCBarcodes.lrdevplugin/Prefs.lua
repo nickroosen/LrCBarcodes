@@ -19,6 +19,11 @@ local defaults = {
     propagateSequenceSeparator = "_",
     propagatePadding = 1,
     keywordParent = "LrCBarcodes",
+    propagateSubject = true,
+    -- Last subject list loaded (the file itself is copied to the app data folder).
+    subjectListName = nil,
+    subjectListCount = 0,
+    subjectListLoaded = nil,
 }
 
 local prefs = LrPrefs.prefsForPlugin()

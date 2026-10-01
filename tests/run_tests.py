@@ -204,10 +204,83 @@ def test_end_to_end():
         shutil.rmtree(work, ignore_errors=True)
 
 
+def test_propagation_members():
+    print("Propagation groups (for copying subject details)")
+    lua = new_lua()
+    res = lua.execute(b"""
+        local P = require 'Propagation'
+        local items = {
+            { photo = 1, source = 'A', subject = { subjectName = 'Ava' } },
+            { photo = 2, destination = 'keep' }, { photo = 3 }, { photo = 4 },
+            { photo = 5, breaks = true }, { photo = 6 },
+            { photo = 7, source = 'B' }, { photo = 8 },
+        }
+        local _, groups = P.plan(items, { includeSource = true, onlyEmpty = true, limit = 2 })
+        local out = {}
+        for i, g in ipairs(groups) do
+            out[i] = { value = g.value, source = g.item.photo, members = g.members,
+                       name = g.item.subject and g.item.subject.subjectName or false }
+        end
+        return out
+    """)
+    check("members ignore 'only empty', respect the limit, stop at a break", to_py(res), [
+        {"value": "A", "source": 1, "members": [2, 3], "name": "Ava"},
+        {"value": "B", "source": 7, "members": [8], "name": False},
+    ])
+
+
+def test_subject_list():
+    print("SubjectList")
+    lua = new_lua()
+    sl = lua.eval("require 'SubjectList'")
+
+    # Shaped like the companion app's export (made-up data), with a BOM, CRLF,
+    # quoted fields and a comma inside a name.
+    csv = ("﻿Name,Class,Access Code,Card,Barcode,Gallery Link,QR Content,Status\r\n"
+           "Ava Martínez,Room 4,QX7K2M9P,1.1,111122223333444,https://x.gotphoto.com/gc/Aaa111/,https://x.gotphoto.com/gc/Aaa111/,Photographed\r\n"
+           "\"Johnson, Mia\",Room 5,WB2D8G5S,1.2,555566667777888,https://x.gotphoto.com/gc/Bbb222/,https://x.gotphoto.com/gc/Bbb222/,Photographed\r\n"
+           "Ethan Johnson,Room 5,HN6T1Y4R,1.3,999900001111222,https://x.gotphoto.com/gc/Ccc333/,https://x.gotphoto.com/gc/Ccc333/,Absent\r\n"
+           "Priya Shah,Room 5,,,,,WALKUP-001 Priya Shah,Photographed\r\n")
+    res = lua.execute(b"local sl, text = ...; local list, err = sl.build(text); return list, err",
+                      sl, csv.encode("utf-8"))
+    lst, err = res if isinstance(res, tuple) else (res, None)
+    check("builds", err, None)
+    cols = to_py(lst[b"columns"])
+    check("detects name/group/access code", (cols.get("name"), cols.get("group"), cols.get("accessCode")),
+          ("Name", "Class", "Access Code"))
+    check("key columns", cols["keys"], ["QR Content", "Gallery Link", "Access Code", "Barcode"])
+    check("subject count", len(to_py(lst[b"subjects"])), 4)
+
+    lookup = lambda codes: to_py(sl.lookup(lst, codes.encode("utf-8")))
+    check("QR link (scheme case and trailing slash ignored)", lookup("HTTPS://x.gotphoto.com/gc/Aaa111"),
+          {"subjectName": "Ava Martínez", "subjectGroup": "Room 4", "accessCode": "QX7K2M9P"})
+    check("Code 128 number", lookup("999900001111222"),
+          {"subjectName": "Ethan Johnson", "subjectGroup": "Room 5", "accessCode": "HN6T1Y4R"})
+    check("siblings in one photo", lookup("https://x.gotphoto.com/gc/Bbb222/; https://x.gotphoto.com/gc/Ccc333/"),
+          {"subjectName": "Johnson, Mia; Ethan Johnson", "subjectGroup": "Room 5", "accessCode": "WB2D8G5S; HN6T1Y4R"})
+    check("QR and barcode of the same card count once", lookup("https://x.gotphoto.com/gc/Aaa111/; 111122223333444"),
+          {"subjectName": "Ava Martínez", "subjectGroup": "Room 4", "accessCode": "QX7K2M9P"})
+    check("walk-up QR content", lookup("WALKUP-001 Priya Shah"), {"subjectName": "Priya Shah", "subjectGroup": "Room 5"})
+    check("no match", lookup("https://x.gotphoto.com/gc/Zzz999/"), None)
+
+    # A plain roster: first/last name, semicolon-separated, link column with an unusual name.
+    roster = "Vorname;Nachname;Team;Galerie\nLiam;Schröder;U12;https://x.gotphoto.com/gc/Ddd444/\n"
+    res = lua.execute(b"local sl, text = ...; return sl.build(text)", sl, roster.encode("utf-8"))
+    lst2 = res[0] if isinstance(res, tuple) else res
+    check("first + last name, link column by content", to_py(sl.lookup(lst2, b"https://x.gotphoto.com/gc/Ddd444/")),
+          {"subjectName": "Liam Schröder", "subjectGroup": "U12"})
+
+    res = lua.execute(b"local sl = ...; return sl.build('Name,Team\\nA,B\\n')", sl)
+    check("rejects lists without a code column", to_py(res[1]) if isinstance(res, tuple) else None,
+          "No column with gallery links, access codes or barcode numbers was found.")
+
+
 if __name__ == "__main__":
     test_compile()
     test_reader_output()
     test_propagation()
+    test_propagation_members()
+    test_subject_list()
     test_end_to_end()
     print("\nFAILED: %d" % failures if failures else "\nAll tests passed.")
     sys.exit(1 if failures else 0)

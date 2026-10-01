@@ -8,6 +8,7 @@ local LrView = import 'LrView'
 local Prefs = require 'Prefs'
 local Propagation = require 'Propagation'
 local ReaderOutput = require 'ReaderOutput'
+local SubjectList = require 'SubjectList'
 
 local KEYWORD = "keyword"
 
@@ -19,6 +20,9 @@ local sourceItems = {
     { title = "QR / 2D Code Value",   value = "matrixValue" },
     { title = "Linear Barcode Value", value = "linearValue" },
     { title = "Barcode Type",         value = "barcodeType" },
+    { title = "Subject Name",         value = "subjectName" },
+    { title = "Subject Group",        value = "subjectGroup" },
+    { title = "Access Code",          value = "accessCode" },
     { title = "Title",          value = "title" },
     { title = "Caption",        value = "caption" },
     { title = "Headline",       value = "headline" },
@@ -61,6 +65,9 @@ local function loadPhotoData(catalog, photos)
     local formatted = catalog:batchGetFormattedMetadata(photos, formattedKeys)
     local pluginKeys = { 'barcodeStatus' }
     for _, key in ipairs(ReaderOutput.FIELDS) do
+        table.insert(pluginKeys, key)
+    end
+    for _, key in ipairs(SubjectList.FIELDS) do
         table.insert(pluginKeys, key)
     end
     local plugin = catalog:batchGetPropertyForPlugin(photos, _PLUGIN, pluginKeys)
@@ -112,13 +119,24 @@ end
 
 local function makePlan(data, props)
     sortPhotoData(data, props.order)
+    -- Fields filled in by Detect Barcodes / Load Subject List, where a card
+    -- without a value means "unreadable" or "not in the list", not "no card".
     local fromBarcode = props.source == 'barcodeValue' or props.source == 'matrixValue'
-                        or props.source == 'linearValue'
+                        or props.source == 'linearValue' or props.source == 'subjectName'
+                        or props.source == 'subjectGroup' or props.source == 'accessCode'
     local items = {}
     for i, d in ipairs(data) do
         local source = Propagation.trim(d.values[props.source])
         local status = d.values.barcodeStatus
+        local subject = nil
+        for _, id in ipairs(SubjectList.FIELDS) do
+            if d.values[id] and d.values[id] ~= "" then
+                subject = subject or {}
+                subject[id] = d.values[id]
+            end
+        end
         items[i] = {
+            subject = subject,
             photo = d.photo,
             name = d.displayName,
             source = source,
@@ -157,6 +175,19 @@ local function describePlan(data, props)
     if ungrouped > 0 then
         table.insert(lines, plural(ungrouped, "photo") .. " outside any group will be left alone.")
     end
+    if props.copySubject then
+        local copied, withSubject = 0, 0
+        for _, g in ipairs(groups) do
+            if g.item.subject then
+                withSubject = withSubject + 1
+                copied = copied + #g.members
+            end
+        end
+        if withSubject > 0 then
+            table.insert(lines, string.format("Subject details from %s will be copied to %s.",
+                                              plural(withSubject, "card"), plural(copied, "photo")))
+        end
+    end
     table.insert(lines, "")
     local shown = math.min(#groups, 6)
     for i = 1, shown do
@@ -188,13 +219,14 @@ local function showDialog(context, data)
     props.separator = Prefs.propagateSequenceSeparator
     props.padding = Prefs.propagatePadding
     props.keywordParent = Prefs.keywordParent
+    props.copySubject = Prefs.propagateSubject
 
     local function refresh()
         props.isKeyword = props.destination == KEYWORD
         props.preview = describePlan(data, props)
     end
     for _, key in ipairs { 'source', 'destination', 'order', 'includeSource', 'onlyEmpty',
-                           'limitEnabled', 'limit', 'sequence', 'separator', 'padding' } do
+                           'limitEnabled', 'limit', 'sequence', 'separator', 'padding', 'copySubject' } do
         props:addObserver(key, refresh)
     end
     refresh()
@@ -268,6 +300,11 @@ local function showDialog(context, data)
             },
         },
 
+        f:checkbox {
+            title = "Also copy Subject Name, Subject Group and Access Code to each subject's photos",
+            value = bind 'copySubject',
+        },
+
         f:separator { fill_horizontal = 1 },
 
         f:static_text {
@@ -297,11 +334,13 @@ local function showDialog(context, data)
     Prefs.propagateSequenceSeparator = props.separator
     Prefs.propagatePadding = props.padding
     Prefs.keywordParent = props.keywordParent
+    Prefs.propagateSubject = props.copySubject
     return props
 end
 
-local function applyPlan(catalog, assignments, props)
+local function applyPlan(catalog, assignments, groups, props)
     local failures = {}
+    local copied = 0
     local isKeyword = props.destination == KEYWORD
 
     catalog:withWriteAccessDo("Propagate Barcode Metadata", function()
@@ -331,9 +370,25 @@ local function applyPlan(catalog, assignments, props)
                 table.insert(failures, tostring(err))
             end
         end
+
+        -- Each card's subject details go to every photo in its group, so they
+        -- can be filtered, searched and exported per subject.
+        if props.copySubject then
+            for _, group in ipairs(groups) do
+                local subject = group.item.subject
+                if subject then
+                    for _, photo in ipairs(group.members) do
+                        for _, id in ipairs(SubjectList.FIELDS) do
+                            photo:setPropertyForPlugin(_PLUGIN, id, subject[id])
+                        end
+                        copied = copied + 1
+                    end
+                end
+            end
+        end
     end, { timeout = 60 })
 
-    return failures
+    return failures, copied
 end
 
 local function propagate(context)
@@ -352,14 +407,21 @@ local function propagate(context)
         return
     end
 
-    local assignments = makePlan(data, props)
-    if #assignments == 0 then
+    local assignments, groups = makePlan(data, props)
+    local hasSubjects = false
+    for _, g in ipairs(groups) do
+        if g.item.subject and #g.members > 0 then hasSubjects = true end
+    end
+    if #assignments == 0 and not (props.copySubject and hasSubjects) then
         LrDialogs.message("Propagate Barcode Metadata", "There was nothing to update.", "info")
         return
     end
 
-    local failures = applyPlan(catalog, assignments, props)
+    local failures, copied = applyPlan(catalog, assignments, groups, props)
     local message = "Updated " .. plural(#assignments - #failures, "photo") .. "."
+    if copied > 0 then
+        message = message .. " Copied subject details to " .. plural(copied, "photo") .. "."
+    end
     if #failures > 0 then
         message = message .. "\n\n" .. plural(#failures, "photo") .. " could not be updated:\n"
                   .. failures[1]

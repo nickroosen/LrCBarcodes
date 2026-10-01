@@ -40,6 +40,29 @@ return {
             searchable = true,
             browsable = true,
         },
+        -- Filled in from a subject list (Load Subject List...) by matching the
+        -- scanned codes, and copied to each subject's photos by Propagate.
+        {
+            id = "subjectName",
+            title = "Subject Name",
+            dataType = "string",
+            searchable = true,
+            browsable = true,
+        },
+        {
+            id = "subjectGroup",
+            title = "Subject Group",
+            dataType = "string",
+            searchable = true,
+            browsable = true,
+        },
+        {
+            id = "accessCode",
+            title = "Access Code",
+            dataType = "string",
+            searchable = true,
+            browsable = true,
+        },
     },
-    schemaVersion = 2,
+    schemaVersion = 3,
 }
