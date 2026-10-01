@@ -13,6 +13,12 @@ return {
 
         'com.adobe.separator',
 
+        prefix .. 'subjectName',
+        prefix .. 'subjectGroup',
+        prefix .. 'accessCode',
+
+        'com.adobe.separator',
+
         'com.adobe.filename',
         'com.adobe.copyname',
         'com.adobe.title',

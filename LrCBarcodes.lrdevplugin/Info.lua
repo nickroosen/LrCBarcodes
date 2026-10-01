@@ -10,6 +10,11 @@ local menuItems = {
         enabledWhen = "photosAvailable",
     },
     {
+        title = "Load Subject List...",
+        file = "LoadSubjectList.lua",
+        enabledWhen = "photosAvailable",
+    },
+    {
         title = "Clear Barcode Data...",
         file = "ClearBarcodes.lua",
         enabledWhen = "photosAvailable",

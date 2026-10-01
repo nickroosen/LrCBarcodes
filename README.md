@@ -67,6 +67,15 @@ To run the development version from a clone of this repository instead, add the
    If a photo contains several barcodes, the values are joined with `; `. The split
    fields let a card with, for example, a QR code *and* a Code 128 be propagated
    one code at a time.
+
+   **Subject names (optional):** choose **Load Subject List...** and pick a CSV,
+   such as the [companion app's](#companion-app-qr-cards-on-a-tablet-or-phone)
+   **Export results** file, or any roster with a gallery link, access code or
+   barcode number column. Each card's scanned codes are looked up in it, filling
+   in **Subject Name**, **Subject Group** and **Access Code**. The list is
+   remembered, so later scans are matched automatically. A card with several
+   codes (siblings) gets all their names. Cards whose codes aren't in the list are
+   reported, so you notice if the list belongs to a different job.
 3. **Propagate.** With the same photos selected, choose **Propagate Barcode
    Metadata...**. Photos are sorted by capture time (or by file name), and each
    barcode value is copied to the photos after it, up to the next barcode. The dialog
@@ -78,6 +87,10 @@ To run the development version from a clone of this repository instead, add the
    - Limit the number of photos per group.
    - Append a sequence number within each group (e.g. `012345_1`, `012345_2`),
      which is useful for renaming files from the Title field.
+   - **Copy Subject Name, Subject Group and Access Code to each subject's photos**
+     (when a subject list is loaded), so every photo of a subject can be found,
+     filtered and exported by name. Subject Name is also a source field, e.g. to
+     put names in the Title for renaming.
 
 
    **Safety for unreadable cards:** if a photo looks like a barcode card but its
@@ -93,7 +106,7 @@ To run the development version from a clone of this repository instead, add the
    the Library by *Barcode Status*.
 
 Propagation can be undone with **Edit › Undo**. **Clear Barcode Data...** removes
-all barcode fields from the selected photos.
+all barcode and subject fields from the selected photos.
 
 ### Supported symbologies
 
@@ -162,9 +175,21 @@ works offline, which helps in gyms and on fields with no signal.
    number, tap them, and photograph the full-screen QR code before photographing
    them. Tap **Mark photographed** to return to the list for the next subject. Use **+ Walk-up** for
    anyone not on the roster; a search that finds no one pre-fills their name.
+   - **Siblings, buddies and small groups:** tap **Select**, pick up to 5 subjects
+     (GotPhoto reads up to 5 QR codes per photo), and tap **Show QR codes** to show
+     them together. **Mark all photographed** marks every one of them.
+   - **Absent and retakes:** on a subject's QR screen, mark them **Absent**, or,
+     once photographed, **Needs retake** (e.g. eyes closed). Add a **Note** if
+     useful. Retakes stay in **To do**, and absent subjects get their own tab.
+     **More › Share missing list** shares or emails a list of everyone not yet
+     photographed, absent, or needing a retake, grouped by class, ready for
+     make-up day. It goes to the job's contact email if there is one.
+   - **Prev / Next** on the QR screen step through the list in the order shown,
+     for when subjects do come through in roster order.
 3. **Afterwards,** choose **More › Export results (CSV)**. The export has every
-   roster column plus the QR content, whether and when each subject was
-   photographed, and which subjects were walk-ups. For card imports, this is also
+   roster column plus the QR content, each subject's status (photographed,
+   absent, needs retake, not photographed), when they were photographed, any note,
+   and which subjects were walk-ups. For card imports, this is also
    the one place you get each subject's name, access code and gallery link
    together in a spreadsheet.
 
@@ -191,6 +216,9 @@ LrCBarcodes.lrdevplugin/
   MetadataProvider.lua      custom metadata fields
   MetadataTagsetFactory.lua Metadata panel preset
   SmartCollections.lua      "Barcode Found" / "No Barcode" smart collections
+  LoadSubjectList.lua       "Load Subject List..." command
+  SubjectList.lua           subject list CSV parsing and code lookup (pure Lua)
+  SubjectStore.lua          keeps the loaded subject list
   PluginInfoProvider.lua    Plug-in Manager settings
   Prefs.lua                 preference defaults
   bin/win/ZXingReader.exe   ZXing-C++ command-line reader (Windows x64)

@@ -85,7 +85,7 @@ test('jobs: describe, walk-ups, search, progress and export', () => {
   assert.deepEqual(lib.progress(job), { done: 1, total: 4 });
 
   const exported = lib.parseCSV(lib.exportCSV(job));
-  assert.deepEqual(exported.headers, ['First', 'Last', 'Team', 'Link', 'QR Content', 'Photographed', 'Photographed At', 'Walk-up']);
+  assert.deepEqual(exported.headers, ['First', 'Last', 'Team', 'Link', 'QR Content', 'Status', 'Photographed', 'Photographed At', 'Note', 'Walk-up']);
   assert.equal(exported.rows[0].Photographed, 'Yes');
   assert.equal(exported.rows[0]['Photographed At'], '2026-10-01T09:30:00.000Z');
   assert.equal(exported.rows[2]['QR Content'], 'WALKUP-001 Sam Lee');
@@ -250,4 +250,47 @@ test('job details typed in on the setup screen', () => {
   assert.equal(cardJob.info.jobNumber, 'JOB00003');
   assert.equal(cardJob.info.pdfs.length, 1);
   assert.equal(lib.hasJobDetails(lib.setJobDetails(lib.createJob('y', [], [], {}, 0), {})), false, 'all blank');
+});
+
+test('subject statuses: photographed, absent, retake', () => {
+  const p = lib.parseCSV('Name,Team\nAna,Hawks\nBen,Hawks\nCal,Owls\nDee,Owls\n');
+  const job = lib.createJob('Spring league', p.headers, p.rows, lib.detectSettings(p.headers, p.rows), 0);
+  const [ana, ben, cal, dee] = job.subjects;
+
+  lib.markPhotographed(ana, '2026-10-01T09:00:00.000Z');
+  lib.markAbsent(ben, '2026-10-01T09:05:00.000Z');
+  lib.markPhotographed(cal, '2026-10-01T09:10:00.000Z');
+  cal.retake = true;
+  cal.note = 'eyes closed';
+  assert.deepEqual(job.subjects.map(lib.statusOf), ['done', 'absent', 'retake', 'todo']);
+
+  const ids = f => job.subjects.filter(s => lib.inFilter(s, f)).map(s => s.data.Name);
+  assert.deepEqual(ids('todo'), ['Cal', 'Dee'], 'retakes still need a photo');
+  assert.deepEqual(ids('done'), ['Ana']);
+  assert.deepEqual(ids('absent'), ['Ben']);
+  assert.equal(ids('all').length, 4);
+
+  // An absent subject who shows up later is simply photographed.
+  lib.markPhotographed(ben, '2026-10-01T11:00:00.000Z');
+  assert.equal(lib.statusOf(ben), 'done');
+  assert.equal(ben.absent, null);
+  lib.markAbsent(ben);
+  lib.clearStatus(dee);
+  assert.equal(lib.statusOf(dee), 'todo');
+
+  const report = lib.missingReport(job);
+  assert.equal(report, [
+    'Spring league', '2 of 4 photographed.',
+    '', 'Not photographed yet (1):', '  Owls:', '    Dee',
+    '', 'Absent (1):', '  Hawks:', '    Ben',
+    '', 'Need a retake (1):', '  Owls:', '    Cal (eyes closed)',
+  ].join('\n'));
+
+  const rows = lib.parseCSV(lib.exportCSV(job)).rows;
+  assert.deepEqual(rows.map(r => [r.Status, r.Photographed, r.Note]), [
+    ['Photographed', 'Yes', ''], ['Absent', 'No', ''], ['Needs retake', 'Yes', 'eyes closed'], ['Not photographed', 'No', ''],
+  ]);
+
+  for (const s of job.subjects) lib.markPhotographed(s);
+  assert.match(lib.missingReport(job), /Everyone has been photographed\.$/);
 });

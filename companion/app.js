@@ -51,6 +51,7 @@
     const node = document.createElement(tag);
     if (props) {
       for (const [k, v] of Object.entries(props)) {
+        if (v == null) continue;
         if (k === 'text') node.textContent = v;
         else if (k === 'class') node.className = v;
         else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
@@ -116,6 +117,7 @@
     for (const v of document.querySelectorAll('.view')) v.hidden = true;
     closeMenu();
     releaseWakeLock();
+    if (route.view !== 'roster' && selecting) setSelecting(false);
     const job = route.jobId ? findJob(route.jobId) : null;
     if (route.view !== 'home' && route.view !== 'setup' && !job) route = { view: 'home' };
     if (route.view === 'setup' && !pendingImport && !editingJobId) route = { view: 'home' };
@@ -552,6 +554,45 @@
     $('#import-warning').hidden = true;
   });
 
+  // Select mode: pick up to 5 subjects (siblings, buddies, small groups) to
+  // show their QR codes together. GotPhoto reads up to 5 QR codes per photo.
+  const MAX_SELECTED = 5;
+  let selecting = false;
+  let selected = [];
+
+  function setSelecting(on) {
+    selecting = on;
+    selected = [];
+    $('#select-toggle').textContent = on ? 'Cancel' : 'Select';
+    $('#select-toggle').setAttribute('aria-pressed', String(on));
+  }
+
+  // Subjects as shown in the roster: filtered, searched, grouped by
+  // team/class in order of first appearance. Returns [{ s, d }].
+  function visibleSubjects(job) {
+    const query = $('#search').value;
+    const groups = new Map();
+    for (const s of job.subjects) {
+      if (!L.inFilter(s, filter) || !L.matches(job, s, query)) continue;
+      const d = L.describe(job, s);
+      const key = d.group || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ s, d });
+    }
+    return groups;
+  }
+
+  function subjectSubtitle(s, d) {
+    const status = L.statusOf(s);
+    const parts = [];
+    if (status === 'done') parts.push('Photographed ' + formatTime(s.done));
+    else if (status === 'retake') parts.push('Needs retake');
+    else if (status === 'absent') parts.push('Absent');
+    else parts.push(d.qr);
+    if (s.note) parts.push(s.note);
+    return parts.join(' · ');
+  }
+
   function renderRoster(job) {
     $('#roster-title').textContent = job.title;
     const warning = $('#import-warning');
@@ -560,53 +601,83 @@
     renderJobInfo(job);
     const query = $('#search').value;
 
-    const counts = { todo: 0, done: 0, all: job.subjects.length };
-    for (const s of job.subjects) counts[s.done ? 'done' : 'todo']++;
+    const counts = { todo: 0, done: 0, absent: 0, all: job.subjects.length };
+    for (const s of job.subjects) for (const f of ['todo', 'done', 'absent']) if (L.inFilter(s, f)) counts[f]++;
     for (const b of document.querySelectorAll('.segmented button')) {
       b.setAttribute('aria-selected', String(b.dataset.filter === filter));
       b.querySelector('span').textContent = counts[b.dataset.filter];
     }
 
-    const visible = job.subjects.filter(s =>
-      (filter === 'all' || (filter === 'done') === !!s.done) && L.matches(job, s, query));
-
-    // Group by team/class in order of first appearance.
-    const groups = new Map();
-    for (const s of visible) {
-      const d = L.describe(job, s);
-      const key = d.group || '';
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({ s, d });
-    }
-
+    const groups = visibleSubjects(job);
+    const order = [];
     const list = $('#subject-list');
     list.replaceChildren();
     const showHeadings = groups.size > 1 || (groups.size === 1 && !groups.has(''));
     for (const [group, items] of groups) {
       if (showHeadings) list.append(el('div', { class: 'group-title', text: group || 'No group' }));
       for (const { s, d } of items) {
+        order.push(s.id);
+        const status = L.statusOf(s);
+        const isSelected = selected.includes(s.id);
+        const tag = s.walkup ? 'Walk-up' : null;
         list.append(el('button', {
-          class: 'subject' + (s.done ? ' done' : ''),
-          onclick: () => go('qr', { jobId: job.id, subjectId: s.id }),
+          class: `subject ${status}` + (selecting ? ' selecting' : '') + (isSelected ? ' selected' : ''),
+          'aria-pressed': selecting ? String(isSelected) : null,
+          onclick: () => {
+            if (selecting) { toggleSelected(job, s.id); return; }
+            qrSequence = order.slice();
+            go('qr', { jobId: job.id, ids: [s.id] });
+          },
         }, [
           el('div', { class: 'subject-main' }, [
             el('div', { class: 'subject-name', text: d.name }),
-            el('div', { class: 'subject-sub', text: s.done ? 'Photographed ' + formatTime(s.done) : d.qr }),
+            el('div', { class: 'subject-sub', text: subjectSubtitle(s, d) }),
           ]),
-          s.walkup ? el('span', { class: 'tag', text: 'Walk-up' }) : null,
-          el('span', { class: 'check', 'aria-label': s.done ? 'Photographed' : 'Not photographed' }),
-        ]));
+          tag ? el('span', { class: 'tag', text: tag }) : null,
+          status === 'retake' ? el('span', { class: 'tag warn', text: 'Retake' }) : null,
+          status === 'absent' ? el('span', { class: 'tag muted', text: 'Absent' }) : null,
+          el('span', { class: 'check', 'aria-label': L.STATUS_LABELS[status] }),
+        ].filter(Boolean)));
       }
     }
 
     const empty = $('#no-subjects');
-    empty.hidden = visible.length > 0;
-    if (!visible.length) {
+    empty.hidden = order.length > 0;
+    if (!order.length) {
       empty.textContent = query ? `No one matches "${query}". Add them as a walk-up?`
         : filter === 'todo' ? (job.subjects.length ? 'Everyone has been photographed.' : 'No subjects yet. Add walk-ups with the button below.')
-        : filter === 'done' ? 'No one has been photographed yet.' : 'No subjects yet.';
+        : filter === 'done' ? 'No one has been photographed yet.'
+        : filter === 'absent' ? 'No one is marked absent.' : 'No subjects yet.';
     }
+
+    $('#add-walkup').hidden = selecting;
+    $('#select-bar').hidden = !selecting;
+    $('#select-count').textContent = selected.length
+      ? `${selected.length} selected (up to ${MAX_SELECTED})` : `Tap up to ${MAX_SELECTED} subjects`;
+    $('#select-show').disabled = !selected.length;
+    $('#select-show').textContent = selected.length > 1 ? `Show ${selected.length} QR codes` : 'Show QR code';
   }
+
+  function toggleSelected(job, id) {
+    const i = selected.indexOf(id);
+    if (i >= 0) selected.splice(i, 1);
+    else if (selected.length >= MAX_SELECTED) toast(`Up to ${MAX_SELECTED} QR codes fit in one photo.`);
+    else selected.push(id);
+    renderRoster(job);
+  }
+
+  $('#select-toggle').addEventListener('click', () => {
+    setSelecting(!selecting);
+    renderRoster(findJob(route.jobId));
+  });
+
+  $('#select-show').addEventListener('click', () => {
+    if (!selected.length) return;
+    const ids = selected.slice();
+    setSelecting(false);
+    qrSequence = null;
+    go('qr', { jobId: route.jobId, ids });
+  });
 
   $('#search').addEventListener('input', () => {
     const job = findJob(route.jobId);
@@ -635,6 +706,31 @@
   });
   document.addEventListener('click', e => {
     if (!e.target.closest('#roster-menu')) closeMenu();
+  });
+
+  // "Still missing" list for the school or league contact: share sheet on
+  // phones and tablets, otherwise an email to the job's contact, otherwise
+  // copy to the clipboard.
+  $('#menu-missing').addEventListener('click', async () => {
+    const job = findJob(route.jobId);
+    closeMenu();
+    const text = L.missingReport(job);
+    const subject = 'Picture day: ' + job.title;
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      try { await navigator.share({ title: subject, text }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const email = job.info && job.info.contact && job.info.contact.email;
+    if (email || !navigator.clipboard) {
+      location.href = 'mailto:' + encodeURIComponent(email || '') +
+        '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(text);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Missing list copied. Paste it into an email or message.');
+    } catch (e) {
+      toast('Could not share the list.');
+    }
   });
 
   $('#menu-export').addEventListener('click', () => {
@@ -703,50 +799,151 @@
     return svg;
   }
 
-  function renderQR(job) {
-    const subject = job.subjects.find(s => s.id === route.subjectId);
-    if (!subject) { go('roster', { jobId: job.id }, true); return; }
-    const d = L.describe(job, subject);
-    $('#qr-name').textContent = d.name;
-    $('#qr-group').textContent = d.group;
-    $('#qr-text').textContent = d.qr;
-    const box = $('#qr-code');
-    box.setAttribute('aria-label', 'QR code for ' + d.name);
-    box.replaceChildren();
-    if (d.qr) {
-      try {
-        box.append(qrSVG(d.qr));
-      } catch (err) {
-        box.append(el('p', { text: 'This content is too long for a QR code.' }));
-      }
-    } else {
-      box.append(el('p', { text: 'Nothing to encode. Check the QR template in Job settings.' }));
+  // Order of the roster list when a QR card was opened, for Prev / Next.
+  let qrSequence = null;
+
+  function qrSubjects(job) {
+    const ids = route.ids || (route.subjectId ? [route.subjectId] : []);
+    return ids.map(id => job.subjects.find(s => s.id === id)).filter(Boolean);
+  }
+
+  // Largest square QR size that fits n codes (plus their name labels) on screen.
+  function qrSize(n) {
+    const w = Math.min(window.innerWidth - 32, 1100);
+    const h = window.innerHeight - 250;
+    let best = 0;
+    for (let cols = 1; cols <= n; cols++) {
+      const rows = Math.ceil(n / cols);
+      const size = Math.min((w - (cols - 1) * 24) / cols, (h - rows * 70) / rows);
+      best = Math.max(best, size);
     }
-    const p = L.progress(job);
-    $('#qr-counter').textContent = `${p.done}/${p.total}`;
-    $('#qr-done').hidden = !!subject.done;
-    $('#qr-done-info').hidden = !subject.done;
-    $('#qr-done-time').textContent = subject.done ? 'Photographed ' + formatTime(subject.done) : '';
+    return Math.max(120, Math.min(best, n === 1 ? 640 : 420));
+  }
+
+  function renderQR(job) {
+    const subjects = qrSubjects(job);
+    if (!subjects.length) { go('roster', { jobId: job.id }, true); return; }
+    const multi = subjects.length > 1;
+    const size = qrSize(subjects.length);
+    const cards = $('#qr-cards');
+    cards.classList.toggle('multi', multi);
+    cards.style.setProperty('--qr-size', size + 'px');
+    cards.replaceChildren(...subjects.map(subject => {
+      const d = L.describe(job, subject);
+      const box = el('div', { class: 'qr-code', role: 'img', 'aria-label': 'QR code for ' + d.name });
+      if (d.qr) {
+        try { box.append(qrSVG(d.qr)); } catch (err) { box.append(el('p', { text: 'This content is too long for a QR code.' })); }
+      } else {
+        box.append(el('p', { text: 'Nothing to encode. Check the QR template in Job settings.' }));
+      }
+      return el('div', { class: 'qr-card' }, [
+        el('div', { class: 'qr-name', text: d.name }),
+        el('div', { class: 'qr-group', text: d.group }),
+        box,
+        multi ? null : el('div', { class: 'qr-text', text: d.qr }),
+      ].filter(Boolean));
+    }));
+
+    // Prev / Next through the roster order (single subject only).
+    const seq = !multi && qrSequence ? qrSequence : null;
+    const pos = seq ? seq.indexOf(subjects[0].id) : -1;
+    $('#qr-prev').hidden = $('#qr-next').hidden = !seq || seq.length < 2;
+    $('#qr-prev').disabled = pos <= 0;
+    $('#qr-next').disabled = pos < 0 || pos >= seq.length - 1;
+    $('#qr-counter').textContent = seq && pos >= 0 ? `${pos + 1} of ${seq.length}` : `${subjects.length} subjects`;
+
+    const statuses = subjects.map(L.statusOf);
+    const allDone = statuses.every(st => st === 'done' || st === 'retake');
+    const one = multi ? null : subjects[0];
+    const status = one ? statuses[0] : null;
+    const statusBox = $('#qr-status');
+    const statusText = !one ? (allDone ? 'All photographed' : '')
+      : status === 'done' ? 'Photographed ' + formatTime(one.done)
+      : status === 'retake' ? 'Needs retake'
+      : status === 'absent' ? 'Marked absent' : '';
+    statusBox.textContent = [statusText, one && one.note ? 'Note: ' + one.note : ''].filter(Boolean).join(' · ');
+    statusBox.hidden = !statusBox.textContent;
+    statusBox.className = 'qr-status ' + (status || (allDone ? 'done' : ''));
+
+    $('#qr-done').hidden = allDone;
+    $('#qr-done').textContent = multi ? `Mark all ${subjects.length} photographed` : 'Mark photographed';
+    $('#qr-secondary').hidden = false;
+    $('#qr-absent').hidden = multi || status === 'absent' || status === 'done' || status === 'retake';
+    $('#qr-retake').hidden = multi || !(status === 'done' || status === 'retake');
+    $('#qr-retake').textContent = status === 'retake' ? 'Retake done' : 'Needs retake';
+    $('#qr-note').hidden = multi;
+    $('#qr-note').textContent = one && one.note ? 'Edit note' : 'Note';
+    $('#qr-undo').hidden = multi ? !allDone : status === 'todo';
     requestWakeLock();
   }
 
-  $('#qr-done').addEventListener('click', () => {
+  function currentQR() {
     const job = findJob(route.jobId);
-    const subject = job.subjects.find(s => s.id === route.subjectId);
-    subject.done = new Date().toISOString();
-    save();
-    toast(L.describe(job, subject).name + ' marked as photographed');
-    // Back to the roster with a fresh search, ready for the next subject.
+    return { job, subjects: qrSubjects(job) };
+  }
+
+  function stepQR(delta) {
+    const { job, subjects } = currentQR();
+    if (!qrSequence || subjects.length !== 1) return;
+    const next = qrSequence[qrSequence.indexOf(subjects[0].id) + delta];
+    if (next) go('qr', { jobId: job.id, ids: [next] }, true);
+  }
+  $('#qr-prev').addEventListener('click', () => stepQR(-1));
+  $('#qr-next').addEventListener('click', () => stepQR(1));
+
+  // Back to the roster with a fresh search, ready for the next subject.
+  function finishSubject(message) {
+    toast(message);
     $('#search').value = '';
     back();
+  }
+
+  $('#qr-done').addEventListener('click', () => {
+    const { job, subjects } = currentQR();
+    for (const s of subjects) L.markPhotographed(s);
+    save();
+    finishSubject(subjects.length > 1 ? `${subjects.length} subjects marked as photographed`
+      : L.describe(job, subjects[0]).name + ' marked as photographed');
+  });
+
+  $('#qr-absent').addEventListener('click', () => {
+    const { job, subjects } = currentQR();
+    L.markAbsent(subjects[0]);
+    save();
+    finishSubject(L.describe(job, subjects[0]).name + ' marked absent');
+  });
+
+  $('#qr-retake').addEventListener('click', () => {
+    const { job, subjects } = currentQR();
+    const s = subjects[0];
+    s.retake = !s.retake;
+    if (s.retake && !s.note) {
+      const note = prompt('Why does this need a retake? (optional)', '');
+      if (note) s.note = note.trim();
+    }
+    save();
+    renderQR(job);
+  });
+
+  $('#qr-note').addEventListener('click', () => {
+    const { job, subjects } = currentQR();
+    const s = subjects[0];
+    const note = prompt('Note for ' + L.describe(job, s).name, s.note || '');
+    if (note === null) return;
+    s.note = note.trim();
+    save();
+    renderQR(job);
   });
 
   $('#qr-undo').addEventListener('click', () => {
-    const job = findJob(route.jobId);
-    const subject = job.subjects.find(s => s.id === route.subjectId);
-    subject.done = null;
+    const { job, subjects } = currentQR();
+    for (const s of subjects) L.clearStatus(s);
     save();
     renderQR(job);
+  });
+
+  window.addEventListener('resize', () => {
+    if (route.view === 'qr') renderQR(findJob(route.jobId));
   });
 
   // Keep the screen on while a QR code is showing.
@@ -817,7 +1014,8 @@
     const subject = L.addWalkup(job, data);
     save();
     $('#search').value = '';
-    go('qr', { jobId: job.id, subjectId: subject.id }, true);
+    qrSequence = null;
+    go('qr', { jobId: job.id, ids: [subject.id] }, true);
   }
 
   $('#walkup-save').addEventListener('click', addWalkup);

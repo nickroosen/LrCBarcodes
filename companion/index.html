@@ -146,16 +146,21 @@
     <button class="bar-btn" id="roster-menu-btn" aria-haspopup="true" aria-expanded="false">More</button>
   </header>
   <div id="roster-menu" class="menu" hidden>
+    <button id="menu-missing">Share missing list</button>
     <button id="menu-export">Export results (CSV)</button>
     <label id="menu-add-pdf" class="menu-item">Add card PDFs<input id="add-pdf" type="file" accept=".pdf,application/pdf" multiple hidden></label>
     <button id="menu-settings">Job settings</button>
     <button id="menu-delete" class="danger">Delete job</button>
   </div>
   <div class="roster-tools">
-    <input id="search" type="search" placeholder="Search name, team or class" autocomplete="off" spellcheck="false" enterkeyhint="search">
+    <div class="search-row">
+      <input id="search" type="search" placeholder="Search name, class or code" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <button id="select-toggle" class="btn small" aria-pressed="false">Select</button>
+    </div>
     <div class="segmented" role="tablist">
       <button data-filter="todo" role="tab">To do <span></span></button>
       <button data-filter="done" role="tab">Done <span></span></button>
+      <button data-filter="absent" role="tab">Absent <span></span></button>
       <button data-filter="all" role="tab">All <span></span></button>
     </div>
   </div>
@@ -169,26 +174,31 @@
     <p id="no-subjects" class="muted" hidden></p>
   </main>
   <button id="add-walkup" class="fab">+ Walk-up</button>
+  <div id="select-bar" class="select-bar" hidden>
+    <span id="select-count"></span>
+    <button id="select-show" class="btn primary">Show QR codes</button>
+  </div>
 </section>
 
 <!-- Full-screen QR card -->
 <section id="view-qr" class="view qr-view" hidden>
   <header class="bar light">
     <button class="bar-btn" data-action="back">Roster</button>
-    <span></span>
+    <div class="qr-nav">
+      <button id="qr-prev" class="bar-btn" aria-label="Previous subject">&#8249; Prev</button>
+      <button id="qr-next" class="bar-btn" aria-label="Next subject">Next &#8250;</button>
+    </div>
     <span id="qr-counter" class="bar-note"></span>
   </header>
-  <main class="qr-main">
-    <div id="qr-name" class="qr-name"></div>
-    <div id="qr-group" class="qr-group"></div>
-    <div id="qr-code" class="qr-code" role="img"></div>
-    <div id="qr-text" class="qr-text"></div>
-  </main>
+  <main id="qr-cards" class="qr-main"></main>
   <footer class="qr-footer">
+    <div id="qr-status" class="qr-status" hidden></div>
     <button id="qr-done" class="btn primary big">Mark photographed</button>
-    <div id="qr-done-info" class="qr-done-info" hidden>
-      <span id="qr-done-time"></span>
-      <button id="qr-undo" class="btn small">Undo</button>
+    <div id="qr-secondary" class="qr-secondary">
+      <button id="qr-absent" class="btn">Absent</button>
+      <button id="qr-retake" class="btn">Needs retake</button>
+      <button id="qr-note" class="btn">Note</button>
+      <button id="qr-undo" class="btn">Undo</button>
     </div>
   </footer>
 </section>

@@ -36,7 +36,11 @@ options:
 
 Returns:
     assignments  list of { photo =, value = }
-    groups       list of { value =, count = } (count = photos that will be written)
+    groups       list of { value =, count =, item =, members = }
+                 count: photos whose destination will be written
+                 item: the source item that started the group
+                 members: photos after it that belong to the group (within the
+                          limit), whether or not their destination is written
     ungrouped    number of photos not in any group
     breaks       list of items that ended a group without starting a new one
 ]]
@@ -53,7 +57,7 @@ function Propagation.plan(items, options)
         if source then
             current = source
             sequence = 0
-            group = { value = source, count = 0 }
+            group = { value = source, count = 0, item = item, members = {} }
             table.insert(groups, group)
             if options.includeSource then
                 value = source
@@ -65,6 +69,7 @@ function Propagation.plan(items, options)
         elseif current then
             if not options.limit or sequence < options.limit then
                 sequence = sequence + 1
+                table.insert(group.members, item.photo)
                 if options.sequence then
                     value = string.format(format, current, options.separator or "", sequence)
                 else

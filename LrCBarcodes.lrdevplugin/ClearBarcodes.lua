@@ -4,6 +4,7 @@ local LrFunctionContext = import 'LrFunctionContext'
 local LrTasks = import 'LrTasks'
 
 local ReaderOutput = require 'ReaderOutput'
+local SubjectList = require 'SubjectList'
 
 local function clearBarcodes(context)
     LrDialogs.attachErrorDialogToFunctionContext(context)
@@ -16,7 +17,7 @@ local function clearBarcodes(context)
 
     local confirm = LrDialogs.confirm(
         "Clear barcode data from " .. #photos .. " photo" .. (#photos == 1 and "" or "s") .. "?",
-        "All barcode fields will be removed. Fields and keywords written by"
+        "Barcode and subject fields will be removed. Fields and keywords written by"
             .. " Propagate Barcode Metadata are not affected.",
         "Clear")
     if confirm ~= 'ok' then
@@ -27,6 +28,9 @@ local function clearBarcodes(context)
         for _, photo in ipairs(photos) do
             photo:setPropertyForPlugin(_PLUGIN, 'barcodeStatus', nil)
             for _, id in ipairs(ReaderOutput.FIELDS) do
+                photo:setPropertyForPlugin(_PLUGIN, id, nil)
+            end
+            for _, id in ipairs(SubjectList.FIELDS) do
                 photo:setPropertyForPlugin(_PLUGIN, id, nil)
             end
         end

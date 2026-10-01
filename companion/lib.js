@@ -443,15 +443,94 @@
     return { done, total: job.subjects.length };
   }
 
+  // ------------------------------------------------- subject status
+
+  // A subject is 'todo', 'done' (photographed), 'retake' (photographed but
+  // needs another go, e.g. eyes closed) or 'absent'. Stored as:
+  //   done: ISO time photographed, absent: ISO time marked absent,
+  //   retake: true, note: free text.
+  function statusOf(subject) {
+    if (subject.done) return subject.retake ? 'retake' : 'done';
+    return subject.absent ? 'absent' : 'todo';
+  }
+
+  const STATUS_LABELS = { todo: 'Not photographed', done: 'Photographed', retake: 'Needs retake', absent: 'Absent' };
+
+  // Roster filter tabs. "To do" includes retakes, since they still need a photo.
+  function inFilter(subject, filter) {
+    const status = statusOf(subject);
+    switch (filter) {
+      case 'todo': return status === 'todo' || status === 'retake';
+      case 'done': return status === 'done';
+      case 'absent': return status === 'absent';
+      default: return true;
+    }
+  }
+
+  function markPhotographed(subject, now) {
+    subject.done = now || new Date().toISOString();
+    subject.absent = null;
+    subject.retake = false;
+  }
+
+  function markAbsent(subject, now) {
+    subject.absent = now || new Date().toISOString();
+    subject.done = null;
+    subject.retake = false;
+  }
+
+  function clearStatus(subject) {
+    subject.done = null;
+    subject.absent = null;
+    subject.retake = false;
+  }
+
+  // Plain-text summary of who still needs photographing, for emailing or
+  // sharing with the school or league contact. Grouped by team/class.
+  function missingReport(job) {
+    const sections = [
+      { title: 'Not photographed yet', status: 'todo' },
+      { title: 'Absent', status: 'absent' },
+      { title: 'Need a retake', status: 'retake' },
+    ];
+    const lines = [];
+    const info = job.info || {};
+    lines.push(job.title + (info.shootDate ? ` (${info.shootDate})` : ''));
+    const p = progress(job);
+    lines.push(`${p.done} of ${p.total} photographed.`);
+    let any = false;
+    for (const section of sections) {
+      const subjects = job.subjects.filter(s => statusOf(s) === section.status);
+      if (!subjects.length) continue;
+      any = true;
+      lines.push('', `${section.title} (${subjects.length}):`);
+      const groups = new Map();
+      for (const s of subjects) {
+        const d = describe(job, s);
+        const key = d.group || '';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(d.name + (s.note ? ` (${s.note})` : ''));
+      }
+      for (const [group, names] of groups) {
+        if (group) lines.push(`  ${group}:`);
+        for (const n of names) lines.push(`${group ? '    ' : '  '}${n}`);
+      }
+    }
+    if (!any) lines.push('', 'Everyone has been photographed.');
+    return lines.join('\n');
+  }
+
   // Roster columns plus what happened on the day.
   function exportCSV(job) {
-    const headers = job.headers.concat(['QR Content', 'Photographed', 'Photographed At', 'Walk-up']);
+    const headers = job.headers.concat(['QR Content', 'Status', 'Photographed', 'Photographed At', 'Note', 'Walk-up']);
     const rows = job.subjects.map(subject => {
       const d = describe(job, subject);
       return Object.assign({}, subject.data, {
         'QR Content': d.qr,
+        'Status': STATUS_LABELS[statusOf(subject)],
         'Photographed': subject.done ? 'Yes' : 'No',
         'Photographed At': subject.done || '',
+        'Note': subject.note || '',
         'Walk-up': subject.walkup ? 'Yes' : 'No',
       });
     });
@@ -462,6 +541,7 @@
     detectDelimiter, parseCSV, toCSV,
     renderTemplate, templateColumns,
     detectSettings, describe, createJob, addWalkup, matches, progress, exportCSV,
+    statusOf, STATUS_LABELS, inFilter, markPhotographed, markAbsent, clearStatus, missingReport,
     parseCardPage, parseCoverPage, addCoverInfo, setJobDetails, hasJobDetails,
     assignLinks, addCards, cardJobSettings, CARD_HEADERS,
   };
