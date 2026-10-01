@@ -178,7 +178,7 @@ input:focus, select:focus, .btn:focus-visible, .card:focus-visible, .subject:foc
   padding: 12px 16px; text-align: center; gap: 6px; }
 .qr-name { font-size: clamp(26px, 6vw, 48px); font-weight: 700; line-height: 1.15; }
 .qr-group { font-size: clamp(17px, 3.5vw, 26px); color: #4b5563; min-height: 1.2em; }
-.qr-code { width: min(88vw, 58dvh, 640px); aspect-ratio: 1; margin: 8px 0; }
+.qr-code { width: var(--qr-size, min(88vw, 58dvh, 640px)); aspect-ratio: 1; margin: 8px auto; }
 .qr-code svg { width: 100%; height: 100%; display: block; }
 .qr-text { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; color: #6b7280;
   max-width: min(88vw, 640px); word-break: break-all; }
@@ -224,3 +224,38 @@ input[type="tel"], input[type="email"] {
 .field-grid { display: grid; gap: 0 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .section-title .optional { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
 .muted.small { font-size: 14px; margin: -2px 0 12px; }
+
+/* Roster: search + Select, status tags, select mode */
+.search-row { display: flex; gap: 8px; align-items: center; }
+.search-row input { flex: 1; }
+.search-row .btn { min-height: var(--tap); flex: none; }
+.segmented { grid-template-columns: repeat(4, 1fr); }
+.tag.warn { background: var(--warn-bg); color: var(--warn-text); }
+.tag.muted { background: var(--border); color: var(--muted); }
+.subject.absent .subject-name { color: var(--muted); }
+.subject.absent .check { border-style: dashed; }
+.subject.retake .check { border-color: var(--warn-text); }
+.subject.selecting .check { border-radius: 8px; }
+.subject.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.subject.selected .check { background: var(--accent); border-color: var(--accent); }
+.select-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; align-items: center; gap: 12px;
+  justify-content: space-between; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -4px 16px rgba(0, 0, 0, .12);
+}
+.select-bar span { color: var(--muted); font-size: 15px; }
+.btn:disabled, .bar-btn:disabled { opacity: .4; cursor: default; }
+
+/* QR screen: one or several cards, Prev / Next, status and actions */
+.qr-nav { display: flex; gap: 4px; justify-self: center; }
+.qr-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.qr-main.multi { display: grid; grid-template-columns: repeat(auto-fit, var(--qr-size)); justify-content: center;
+  align-content: center; gap: 20px 24px; }
+.qr-main.multi .qr-name { font-size: clamp(18px, 3vw, 28px); }
+.qr-main.multi .qr-group { font-size: clamp(14px, 2.2vw, 18px); }
+.qr-status { text-align: center; font-weight: 600; font-size: 17px; margin-bottom: 10px; color: #374151; }
+.qr-status.done { color: #15803d; }
+.qr-status.retake { color: #b45309; }
+.qr-status.absent { color: #6b7280; }
+.qr-secondary { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
+.qr-secondary .btn { min-height: 44px; font-size: 15px; }

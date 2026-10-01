@@ -162,9 +162,21 @@ works offline, which helps in gyms and on fields with no signal.
    number, tap them, and photograph the full-screen QR code before photographing
    them. Tap **Mark photographed** to return to the list for the next subject. Use **+ Walk-up** for
    anyone not on the roster; a search that finds no one pre-fills their name.
+   - **Siblings, buddies and small groups:** tap **Select**, pick up to 5 subjects
+     (GotPhoto reads up to 5 QR codes per photo), and tap **Show QR codes** to show
+     them together. **Mark all photographed** marks every one of them.
+   - **Absent and retakes:** on a subject's QR screen, mark them **Absent**, or,
+     once photographed, **Needs retake** (e.g. eyes closed). Add a **Note** if
+     useful. Retakes stay in **To do**, and absent subjects get their own tab.
+     **More › Share missing list** shares or emails a list of everyone not yet
+     photographed, absent, or needing a retake, grouped by class, ready for
+     make-up day. It goes to the job's contact email if there is one.
+   - **Prev / Next** on the QR screen step through the list in the order shown,
+     for when subjects do come through in roster order.
 3. **Afterwards,** choose **More › Export results (CSV)**. The export has every
-   roster column plus the QR content, whether and when each subject was
-   photographed, and which subjects were walk-ups. For card imports, this is also
+   roster column plus the QR content, each subject's status (photographed,
+   absent, needs retake, not photographed), when they were photographed, any note,
+   and which subjects were walk-ups. For card imports, this is also
    the one place you get each subject's name, access code and gallery link
    together in a spreadsheet.
 
