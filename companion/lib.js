@@ -424,6 +424,45 @@
     return subject;
   }
 
+  // ------------------------------------------------ naming spare cards
+
+  // True if the subject has a name of its own (not just the fallback, e.g.
+  // "Card 2.1 · ZFC98L4W" for a blank password card).
+  function hasName(job, subject) {
+    return renderTemplate(job.settings.nameTemplate, subject.data) !== '';
+  }
+
+  // Blank printed cards (no name yet) that haven't been used: candidates for
+  // a walk-up who is handed a spare card.
+  function blankCards(job) {
+    return job.subjects.filter(s => !s.walkup && !hasName(job, s) && statusOf(s) === 'todo');
+  }
+
+  // Finds a blank card by its access code or card number (as printed on it).
+  function findBlankCard(job, text) {
+    const q = String(text || '').trim().toLowerCase().replace(/^#/, '');
+    if (!q) return null;
+    return blankCards(job).find(s =>
+      String(s.data['Access Code'] || '').toLowerCase() === q ||
+      String(s.data['Card'] || '').toLowerCase() === q) || null;
+  }
+
+  // Sets name/group (any roster columns) for a subject, e.g. a spare card
+  // handed to a walk-up. The QR content is unchanged for cards, since it comes
+  // from the card's own column. Records when a blank card was named on site.
+  function setSubjectDetails(job, subject, data, now) {
+    const wasNamed = hasName(job, subject);
+    for (const [key, value] of Object.entries(data)) {
+      if (!job.headers.includes(key)) job.headers.push(key);
+      subject.data[key] = String(value == null ? '' : value).trim();
+    }
+    if (!wasNamed && !subject.walkup && hasName(job, subject)) {
+      subject.namedOnSite = now || new Date().toISOString();
+    }
+    if (!hasName(job, subject)) subject.namedOnSite = null;
+    return subject;
+  }
+
   // Case- and accent-insensitive search across name, group, QR content and
   // every roster field (e.g. access code, barcode number).
   function normalize(s) {
@@ -522,7 +561,7 @@
 
   // Roster columns plus what happened on the day.
   function exportCSV(job) {
-    const headers = job.headers.concat(['QR Content', 'Status', 'Photographed', 'Photographed At', 'Note', 'Walk-up']);
+    const headers = job.headers.concat(['QR Content', 'Status', 'Photographed', 'Photographed At', 'Note', 'Walk-up', 'Named On Site']);
     const rows = job.subjects.map(subject => {
       const d = describe(job, subject);
       return Object.assign({}, subject.data, {
@@ -532,6 +571,7 @@
         'Photographed At': subject.done || '',
         'Note': subject.note || '',
         'Walk-up': subject.walkup ? 'Yes' : 'No',
+        'Named On Site': subject.namedOnSite ? 'Yes' : 'No',
       });
     });
     return toCSV(headers, rows);
@@ -542,6 +582,7 @@
     renderTemplate, templateColumns,
     detectSettings, describe, createJob, addWalkup, matches, progress, exportCSV,
     statusOf, STATUS_LABELS, inFilter, markPhotographed, markAbsent, clearStatus, missingReport,
+    hasName, blankCards, findBlankCard, setSubjectDetails,
     parseCardPage, parseCoverPage, addCoverInfo, setJobDetails, hasJobDetails,
     assignLinks, addCards, cardJobSettings, CARD_HEADERS,
   };

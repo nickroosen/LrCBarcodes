@@ -175,6 +175,14 @@ works offline, which helps in gyms and on fields with no signal.
    number, tap them, and photograph the full-screen QR code before photographing
    them. Tap **Mark photographed** to return to the list for the next subject. Use **+ Walk-up** for
    anyone not on the roster; a search that finds no one pre-fills their name.
+   - **Spare printed cards:** if you print extra blank cards for walk-ups, give
+     the walk-up a spare card and put their name on it, so their photos stay tied
+     to that card's own QR code, access code and gallery link. Either search for
+     the card's access code (or card number), open it and tap **Add name**, or
+     tap **+ Walk-up** and type the code into **Spare printed card**. Blank cards
+     show a "No name" tag, and cards named on the day are marked **Named on site**
+     in the roster and the export, so you know which names to add in GotPhoto.
+     **Edit name** also fixes typos on any subject.
    - **Siblings, buddies and small groups:** tap **Select**, pick up to 5 subjects
      (GotPhoto reads up to 5 QR codes per photo), and tap **Show QR codes** to show
      them together. **Mark all photographed** marks every one of them.

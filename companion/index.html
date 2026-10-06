@@ -197,6 +197,7 @@
     <div id="qr-secondary" class="qr-secondary">
       <button id="qr-absent" class="btn">Absent</button>
       <button id="qr-retake" class="btn">Needs retake</button>
+      <button id="qr-name-edit" class="btn">Add name</button>
       <button id="qr-note" class="btn">Note</button>
       <button id="qr-undo" class="btn">Undo</button>
     </div>
@@ -207,12 +208,20 @@
 <section id="view-walkup" class="view" hidden>
   <header class="bar">
     <button class="bar-btn" data-action="back">Cancel</button>
-    <h1>Add walk-up</h1>
+    <h1 id="walkup-title">Add walk-up</h1>
     <button class="bar-btn strong" id="walkup-save">Add</button>
   </header>
   <main class="content">
+    <!-- Shown when the job has unused blank cards: hand the walk-up a spare
+         printed card and put their name on it, instead of a new walk-up code. -->
+    <label id="spare-card" class="field" hidden>
+      <span>Spare printed card <span class="optional">optional</span></span>
+      <input id="spare-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"
+             placeholder="Access code or card number on the card">
+      <small id="spare-status"></small>
+    </label>
     <form id="walkup-form" autocomplete="off"></form>
-    <p class="muted">The QR code will contain: <strong id="walkup-preview"></strong></p>
+    <p class="muted"><span id="walkup-preview-label">The QR code will contain:</span> <strong id="walkup-preview"></strong></p>
   </main>
 </section>
 
