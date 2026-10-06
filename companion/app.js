@@ -620,6 +620,7 @@
         const status = L.statusOf(s);
         const isSelected = selected.includes(s.id);
         const tag = s.walkup ? 'Walk-up' : null;
+        const blank = !s.walkup && !L.hasName(job, s);
         list.append(el('button', {
           class: `subject ${status}` + (selecting ? ' selecting' : '') + (isSelected ? ' selected' : ''),
           'aria-pressed': selecting ? String(isSelected) : null,
@@ -634,6 +635,8 @@
             el('div', { class: 'subject-sub', text: subjectSubtitle(s, d) }),
           ]),
           tag ? el('span', { class: 'tag', text: tag }) : null,
+          blank ? el('span', { class: 'tag blank', text: 'No name' }) : null,
+          s.namedOnSite ? el('span', { class: 'tag', text: 'Named on site' }) : null,
           status === 'retake' ? el('span', { class: 'tag warn', text: 'Retake' }) : null,
           status === 'absent' ? el('span', { class: 'tag muted', text: 'Absent' }) : null,
           el('span', { class: 'check', 'aria-label': L.STATUS_LABELS[status] }),
@@ -872,6 +875,8 @@
     $('#qr-retake').hidden = multi || !(status === 'done' || status === 'retake');
     $('#qr-retake').textContent = status === 'retake' ? 'Retake done' : 'Needs retake';
     $('#qr-note').hidden = multi;
+    $('#qr-name-edit').hidden = multi;
+    $('#qr-name-edit').textContent = one && !L.hasName(job, one) ? 'Add name' : 'Edit name';
     $('#qr-note').textContent = one && one.note ? 'Edit note' : 'Note';
     $('#qr-undo').hidden = multi ? !allDone : status === 'todo';
     requestWakeLock();
@@ -925,6 +930,11 @@
     renderQR(job);
   });
 
+  $('#qr-name-edit').addEventListener('click', () => {
+    const { job, subjects } = currentQR();
+    go('walkup', { jobId: job.id, editId: subjects[0].id });
+  });
+
   $('#qr-note').addEventListener('click', () => {
     const { job, subjects } = currentQR();
     const s = subjects[0];
@@ -966,15 +976,38 @@
 
   // ----------------------------------------------------------- walk-up
 
+  // The walk-up form serves three cases:
+  //   - a new walk-up, who gets a generated code (WALKUP-001 ...)
+  //   - a walk-up handed a spare printed card: the name goes on that card
+  //   - editing an existing subject (route.editId), e.g. naming a blank card
+  //     from its QR screen or fixing a typo
   function walkupFields(job) {
     const s = job.settings;
     const fields = L.templateColumns(s.nameTemplate, job.headers);
     if (s.groupColumn && !fields.includes(s.groupColumn)) fields.push(s.groupColumn);
-    for (const h of L.templateColumns(s.walkupTemplate, job.headers)) if (!fields.includes(h)) fields.push(h);
+    if (!editingSubject(job)) {
+      for (const h of L.templateColumns(s.walkupTemplate, job.headers)) if (!fields.includes(h)) fields.push(h);
+    }
     return fields.length ? fields : ['Name'];
   }
 
+  function editingSubject(job) {
+    return route.editId ? job.subjects.find(s => s.id === route.editId) || null : null;
+  }
+
+  function spareCard(job) {
+    const code = $('#spare-code').value;
+    return code.trim() ? L.findBlankCard(job, code) : null;
+  }
+
   function renderWalkup(job) {
+    const editing = editingSubject(job);
+    const spares = editing ? [] : L.blankCards(job);
+    $('#walkup-title').textContent = editing ? (L.hasName(job, editing) ? 'Edit name' : 'Add name') : 'Add walk-up';
+    $('#walkup-save').textContent = editing ? 'Save' : 'Add';
+    $('#spare-card').hidden = !spares.length;
+    $('#spare-code').value = '';
+
     const form = $('#walkup-form');
     form.replaceChildren();
     const fields = walkupFields(job);
@@ -983,6 +1016,7 @@
     fields.forEach((h, i) => {
       const input = el('input', { type: 'text', name: h, autocomplete: 'off' });
       if (h === job.settings.groupColumn) input.setAttribute('list', listId);
+      if (editing) input.value = editing.data[h] || '';
       input.addEventListener('input', () => updateWalkupPreview(job));
       form.append(el('label', { class: 'field' }, [el('span', { text: h }), input]));
       if (i === 0) setTimeout(() => input.focus(), 50);
@@ -990,9 +1024,14 @@
     form.append(el('datalist', { id: listId }, groups.map(g => el('option', { value: g }))));
     // Lets the keyboard's Go/Enter key submit a form with several fields.
     form.append(el('button', { type: 'submit', class: 'visually-hidden', tabindex: '-1', text: 'Add' }));
-    // Prefill the name from the search that found no one.
-    const query = $('#search').value.trim();
-    if (query && fields.length) form.elements[0].value = query;
+
+    if (!editing) {
+      // A search that found no one is usually the person's name, or the code
+      // of the spare card in their hand.
+      const query = $('#search').value.trim();
+      if (query && L.findBlankCard(job, query)) $('#spare-code').value = query;
+      else if (query && fields.length) form.elements[0].value = query;
+    }
     updateWalkupPreview(job);
   }
 
@@ -1003,23 +1042,62 @@
   }
 
   function updateWalkupPreview(job) {
-    const probe = { id: 'w', data: walkupData(), walkup: (job.walkups || 0) + 1 };
-    $('#walkup-preview').textContent = L.describe(job, probe).qr;
+    const editing = editingSubject(job);
+    const status = $('#spare-status');
+    status.textContent = '';
+    status.className = '';
+    let target = editing;
+    if (!editing && $('#spare-code').value.trim()) {
+      target = spareCard(job);
+      if (target) {
+        status.textContent = `${L.describe(job, target).name}: the name goes on this card.`;
+        status.className = 'ok';
+      } else {
+        status.textContent = 'No unused blank card with that access code or card number.';
+        status.className = 'bad';
+      }
+    }
+    if (target) {
+      $('#walkup-preview-label').textContent = "The card's QR code (unchanged):";
+      $('#walkup-preview').textContent = L.describe(job, target).qr;
+    } else {
+      const probe = { id: 'w', data: walkupData(), walkup: (job.walkups || 0) + 1 };
+      $('#walkup-preview-label').textContent = 'The QR code will contain:';
+      $('#walkup-preview').textContent = L.describe(job, probe).qr;
+    }
   }
 
-  function addWalkup() {
+  $('#spare-code').addEventListener('input', () => updateWalkupPreview(findJob(route.jobId)));
+
+  function saveWalkup() {
     const job = findJob(route.jobId);
     const data = walkupData();
+    const editing = editingSubject(job);
+
+    if (editing) {
+      L.setSubjectDetails(job, editing, data);
+      save();
+      back();  // to the QR screen it was opened from
+      return;
+    }
     if (!Object.values(data).some(Boolean)) { toast('Enter a name first.'); return; }
-    const subject = L.addWalkup(job, data);
+
+    let subject;
+    if ($('#spare-code').value.trim()) {
+      subject = spareCard(job);
+      if (!subject) { toast('Check the spare card code, or clear it to create a walk-up code.'); return; }
+      L.setSubjectDetails(job, subject, data);
+    } else {
+      subject = L.addWalkup(job, data);
+    }
     save();
     $('#search').value = '';
     qrSequence = null;
     go('qr', { jobId: job.id, ids: [subject.id] }, true);
   }
 
-  $('#walkup-save').addEventListener('click', addWalkup);
-  $('#walkup-form').addEventListener('submit', e => { e.preventDefault(); addWalkup(); });
+  $('#walkup-save').addEventListener('click', saveWalkup);
+  $('#walkup-form').addEventListener('submit', e => { e.preventDefault(); saveWalkup(); });
 
   // -------------------------------------------------------------- init
 

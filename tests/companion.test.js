@@ -85,7 +85,7 @@ test('jobs: describe, walk-ups, search, progress and export', () => {
   assert.deepEqual(lib.progress(job), { done: 1, total: 4 });
 
   const exported = lib.parseCSV(lib.exportCSV(job));
-  assert.deepEqual(exported.headers, ['First', 'Last', 'Team', 'Link', 'QR Content', 'Status', 'Photographed', 'Photographed At', 'Note', 'Walk-up']);
+  assert.deepEqual(exported.headers, ['First', 'Last', 'Team', 'Link', 'QR Content', 'Status', 'Photographed', 'Photographed At', 'Note', 'Walk-up', 'Named On Site']);
   assert.equal(exported.rows[0].Photographed, 'Yes');
   assert.equal(exported.rows[0]['Photographed At'], '2026-10-01T09:30:00.000Z');
   assert.equal(exported.rows[2]['QR Content'], 'WALKUP-001 Sam Lee');
@@ -293,4 +293,46 @@ test('subject statuses: photographed, absent, retake', () => {
 
   for (const s of job.subjects) lib.markPhotographed(s);
   assert.match(lib.missingReport(job), /Everyone has been photographed\.$/);
+});
+
+test('naming spare (blank) cards for walk-ups', () => {
+  const job = lib.createJob('Picture day', lib.CARD_HEADERS, [], lib.cardJobSettings(), 0);
+  const cards = lib.parseCardPage(cardPage([
+    { card: '1.1', code: 'AAAA1111', digits: '111111111111111', name: 'Ava Martínez', group: 'Bluebells' },
+    { card: '2.1', code: 'BBBB2222', digits: '222222222222222' },
+  ]).concat(cardPage([{ card: '2.2', code: 'CCCC3333', digits: '333333333333333' }]).map(it => ({ ...it, y: it.y + 900 }))));
+  lib.assignLinks(cards, [
+    { text: 'https://s.gotphoto.com/gc/a/', x: 300, y: 335 },
+    { text: 'https://s.gotphoto.com/gc/b/', x: 300, y: 746 },
+    { text: 'https://s.gotphoto.com/gc/c/', x: 300, y: 1235 },
+  ]);
+  lib.addCards(job, cards);
+  const [ava, spare1, spare2] = job.subjects;
+
+  assert.equal(lib.hasName(job, ava), true);
+  assert.equal(lib.hasName(job, spare1), false);
+  assert.deepEqual(lib.blankCards(job).map(s => s.data.Card), ['2.1', '2.2']);
+
+  // Found by the access code or card number printed on the card.
+  assert.equal(lib.findBlankCard(job, ' bbbb2222 '), spare1);
+  assert.equal(lib.findBlankCard(job, '#2.2'), spare2);
+  assert.equal(lib.findBlankCard(job, 'AAAA1111'), null, 'named cards are not spares');
+  assert.equal(lib.findBlankCard(job, ''), null);
+
+  lib.setSubjectDetails(job, spare1, { Name: ' Priya Shah ', Class: 'Daisies' }, '2026-10-06T10:00:00.000Z');
+  assert.deepEqual(lib.describe(job, spare1), { name: 'Priya Shah', group: 'Daisies', qr: 'https://s.gotphoto.com/gc/b/' },
+    "keeps the card's own QR code");
+  assert.equal(spare1.namedOnSite, '2026-10-06T10:00:00.000Z');
+  assert.deepEqual(lib.blankCards(job).map(s => s.data.Card), ['2.2']);
+
+  // Fixing a typo on a named card isn't "named on site".
+  lib.setSubjectDetails(job, ava, { Name: 'Ava Martinez' });
+  assert.equal(ava.namedOnSite, undefined);
+
+  // A photographed blank card is no longer a spare.
+  lib.markPhotographed(spare2);
+  assert.deepEqual(lib.blankCards(job), []);
+
+  const rows = lib.parseCSV(lib.exportCSV(job)).rows;
+  assert.deepEqual(rows.map(r => [r.Name, r['Named On Site']]), [['Ava Martinez', 'No'], ['Priya Shah', 'Yes'], ['', 'No']]);
 });

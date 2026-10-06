@@ -1,6 +1,6 @@
 // Offline support: serve the app from cache, refresh the cache in the background.
 // Bump VERSION whenever the app's files change so clients pick up the update.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = 'lrcb-companion-' + VERSION;
 const FILES = [
   './', 'index.html', 'styles.css', 'app.js', 'lib.js', 'vendor/qrcode.js', 'manifest.webmanifest',
