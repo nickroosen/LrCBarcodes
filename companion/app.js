@@ -205,7 +205,8 @@
   async function loadCardLibraries() {
     if (!pdfjsLib) {
       pdfjsLib = await import('./vendor/pdfjs/pdf.min.mjs');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.min.mjs', location.href).href;
+      // The wrapper installs fallbacks for older Safari before loading the worker.
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.polyfilled.mjs', location.href).href;
     }
     if (!zxingReady) {
       zxingReady = loadScript('vendor/zxing/zxing-reader.js').then(() => window.ZXingWASM.prepareZXingModule({
@@ -300,7 +301,10 @@
       }
     } catch (err) {
       busy(null);
-      toast('Could not read the PDF: ' + (err && err.message ? err.message : err));
+      // Include the OS version: most failures here are a too-old Safari.
+      const os = (/OS (\d+[_.]\d+)/.exec(navigator.userAgent) || [])[1];
+      toast('Could not read the PDF: ' + (err && err.message ? err.message : err)
+            + (os ? ` (iPadOS/iOS ${os.replace('_', '.')})` : ''));
       return;
     }
     busy(null);

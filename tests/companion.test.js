@@ -336,3 +336,36 @@ test('naming spare (blank) cards for walk-ups', () => {
   const rows = lib.parseCSV(lib.exportCSV(job)).rows;
   assert.deepEqual(rows.map(r => [r.Name, r['Named On Site']]), [['Ava Martinez', 'No'], ['Priya Shah', 'Yes'], ['', 'No']]);
 });
+
+test('polyfills for older iPad Safari', async () => {
+  // Remove the features (as on iPadOS < 17.4), load the fallbacks, check them, restore.
+  const saved = {
+    withResolvers: Promise.withResolvers,
+    transferToFixedLength: ArrayBuffer.prototype.transferToFixedLength,
+    transfer: ArrayBuffer.prototype.transfer,
+  };
+  delete Promise.withResolvers;
+  delete ArrayBuffer.prototype.transferToFixedLength;
+  delete ArrayBuffer.prototype.transfer;
+  try {
+    delete require.cache[require.resolve('../companion/polyfills.js')];
+    require('../companion/polyfills.js');
+
+    const { promise, resolve, reject } = Promise.withResolvers();
+    assert.ok(promise instanceof Promise);
+    assert.equal(typeof resolve, 'function');
+    assert.equal(typeof reject, 'function');
+    resolve(42);
+    assert.equal(await promise, 42);
+    const buf = new Uint8Array([1, 2, 3, 4]).buffer;
+    assert.deepEqual([...new Uint8Array(buf.transferToFixedLength(2))], [1, 2]);
+    assert.deepEqual([...new Uint8Array(buf.transferToFixedLength(6))], [1, 2, 3, 4, 0, 0]);
+    assert.deepEqual([...new Uint8Array(buf.transfer())], [1, 2, 3, 4]);
+    assert.equal([1, 2, 3].at(-1), 3);
+    assert.equal([1, 2, 3, 4].findLast(n => n % 2), 3);
+  } finally {
+    Promise.withResolvers = saved.withResolvers;
+    ArrayBuffer.prototype.transferToFixedLength = saved.transferToFixedLength;
+    ArrayBuffer.prototype.transfer = saved.transfer;
+  }
+});
