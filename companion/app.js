@@ -301,10 +301,13 @@
       }
     } catch (err) {
       busy(null);
-      // Include the OS version: most failures here are a too-old Safari.
-      const os = (/OS (\d+[_.]\d+)/.exec(navigator.userAgent) || [])[1];
+      // Include the browser version: failures here are usually a missing
+      // browser feature. (iPad Safari reports itself as a Mac, so use Safari's
+      // own version rather than the OS version.)
+      const ua = navigator.userAgent;
+      const safari = !/Chrome|CriOS|Firefox|FxiOS|Edg/.test(ua) && (/Version\/(\d+(?:\.\d+)?)/.exec(ua) || [])[1];
       toast('Could not read the PDF: ' + (err && err.message ? err.message : err)
-            + (os ? ` (iPadOS/iOS ${os.replace('_', '.')})` : ''));
+            + (safari ? ` (Safari ${safari})` : ''));
       return;
     }
     busy(null);
