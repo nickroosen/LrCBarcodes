@@ -369,3 +369,33 @@ test('polyfills for older iPad Safari', async () => {
     ArrayBuffer.prototype.transfer = saved.transfer;
   }
 });
+
+test('polyfill: for await over a ReadableStream (missing in Safari)', async () => {
+  const proto = ReadableStream.prototype;
+  const saved = { values: proto.values, iter: proto[Symbol.asyncIterator] };
+  delete proto.values;
+  delete proto[Symbol.asyncIterator];
+  try {
+    delete require.cache[require.resolve('../companion/polyfills.js')];
+    require('../companion/polyfills.js');
+    const stream = () => new ReadableStream({
+      start(c) { c.enqueue('a'); c.enqueue('b'); c.enqueue('c'); c.close(); },
+    });
+
+    const seen = [];
+    for await (const chunk of stream()) seen.push(chunk);
+    assert.deepEqual(seen, ['a', 'b', 'c']);
+
+    // Breaking out of the loop releases (and cancels) the stream.
+    const s = stream();
+    for await (const chunk of s) { if (chunk === 'a') break; }
+    assert.equal(s.locked, false);
+
+    // Errors propagate out of the loop.
+    const failing = new ReadableStream({ pull(c) { c.error(new Error('boom')); } });
+    await assert.rejects(async () => { for await (const _ of failing) { /* nothing */ } }, /boom/);
+  } finally {
+    proto.values = saved.values;
+    proto[Symbol.asyncIterator] = saved.iter;
+  }
+});

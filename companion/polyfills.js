@@ -1,5 +1,7 @@
 /*
- * Small fallbacks for older iPad Safari versions.
+ * Small fallbacks for features the bundled libraries use but Safari lacks,
+ * either at all (async iteration of ReadableStream, missing even in iPadOS 26)
+ * or in older versions.
  *
  * PDF.js 6 (vendor/pdfjs) calls Promise.withResolvers() and
  * ArrayBuffer.prototype.transferToFixedLength(), which Safari only added in
@@ -50,6 +52,41 @@
   }
   define(ArrayBuffer.prototype, 'transferToFixedLength', transferToFixedLength);
   define(ArrayBuffer.prototype, 'transfer', transferToFixedLength);
+
+  // `for await (const chunk of stream)` over a ReadableStream. PDF.js reads
+  // page text this way (getTextContent), but Safari, including iPadOS 26,
+  // doesn't support async iteration of streams, so importing a card PDF failed
+  // with "undefined is not a function (near '...t of e...')".
+  if (typeof ReadableStream !== 'undefined') {
+    define(ReadableStream.prototype, 'values', function values(options) {
+      const preventCancel = !!(options && options.preventCancel);
+      const reader = this.getReader();
+      return {
+        async next() {
+          try {
+            const result = await reader.read();
+            if (result.done) reader.releaseLock();
+            return result;
+          } catch (err) {
+            reader.releaseLock();
+            throw err;
+          }
+        },
+        async return(value) {
+          if (!preventCancel) {
+            const cancelled = reader.cancel(value);
+            reader.releaseLock();
+            await cancelled;
+          } else {
+            reader.releaseLock();
+          }
+          return { done: true, value };
+        },
+        [Symbol.asyncIterator]() { return this; },
+      };
+    });
+    define(ReadableStream.prototype, Symbol.asyncIterator, ReadableStream.prototype.values);
+  }
 
   define(Array.prototype, 'findLast', function findLast(fn, thisArg) {
     for (let i = this.length - 1; i >= 0; i--) if (fn.call(thisArg, this[i], i, this)) return this[i];
